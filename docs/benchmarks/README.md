@@ -26,3 +26,4 @@ a performance claim without an entry does not merge.
 | # | Entry | Phase | Question it answers |
 |---|---|---|---|
 | 001 | `001-baseline-classic.md` | 1 | What does the straight-through pipeline do at 1x/10x/50x on classic queues? |
+| 002 | `002-streams-migration.md` | 3 | What does the Streams migration buy, and what semantics change? A/B vs 001, plus the replay drill. |

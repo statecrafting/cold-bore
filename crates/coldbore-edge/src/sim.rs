@@ -96,10 +96,11 @@ pub async fn generator(
     faults: FaultBox,
     counters: Arc<Counters>,
     tx: Sender<Frame>,
+    epoch: u64,
 ) {
-    // One epoch per generator run: seq accounting downstream stays sound
-    // across edge restarts because identity includes the epoch.
-    let epoch = now_ms();
+    // One epoch per process run (assigned in main): seq accounting
+    // downstream stays sound across edge restarts because identity
+    // includes the epoch, and the stream producer's dedup name embeds it.
     let mut wells: Vec<WellSim> = (1..=cfg.pads)
         .flat_map(|p| (1..=cfg.wells_per_pad).map(move |w| (p, w)))
         .map(|(p, w)| WellSim::new(p, w, epoch))

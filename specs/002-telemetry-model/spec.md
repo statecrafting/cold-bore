@@ -46,6 +46,11 @@ parsing, panic-free).
 - Control commands carry their own bounds (`dup` in [0,1], `reorder` <=
   4096, `rate` in (0,100]); both the api (pre-publish) and services
   (post-receive) validate.
+- Stream-mode additions (spec 008): the config carries the native stream
+  endpoint (`CB_STREAM_HOST/PORT/USER/PASS`), the consumer start grammar
+  (`CB_STREAM_FROM` = `first|next|offset:N`, `CB_STREAM_FORCE_FROM`), and
+  the topology names the stream (`cb.frames.s`) and the offset-tracking
+  consumer reference (`cb-ingest`).
 - The Python mirror of these contracts lives in `services/api/app/control.py`
   (commands) and in the api's tolerant reading of snapshots/events. A change
   to any wire shape changes this crate, the Python mirror, the architecture

@@ -19,7 +19,7 @@ const charts = {
   backlog: new RollingChart(
     document.getElementById("chart-backlog"),
     document.getElementById("legend-backlog"),
-    { series: [{ name: "queue depth", color: S1 }, { name: "unacked", color: S2 }, { name: "edge buffer", color: S3 }] }
+    { series: [{ name: "broker backlog", color: S1 }, { name: "unacked", color: S2 }, { name: "edge buffer", color: S3 }] }
   ),
   latency: new RollingChart(
     document.getElementById("chart-latency"),
@@ -89,11 +89,18 @@ function onMetrics(service, m) {
     rates.gen = rate(m, before, "generated") ?? rates.gen;
     rates.conf = rate(m, before, "confirmed") ?? rates.conf;
     rates.retrans = rate(m, before, "retransmits") ?? rates.retrans;
-    charts.backlog.push(m.t_ms, [
-      latest.broker?.depth ?? null,
-      latest.broker?.unacked ?? null,
-      m.buffered,
-    ]);
+    // Backlog: classic mode reads the queue; stream mode derives lag from
+    // total retained records vs the consumer's committed offset.
+    const b = latest.broker ?? {};
+    let backlog = b.depth ?? null;
+    let unacked = b.unacked ?? null;
+    if (latest.ingest?.mode === "stream") {
+      const total = b.stream?.messages;
+      const committed = latest.ingest?.committed_offset;
+      backlog = total != null ? Math.max(0, total - 1 - (committed ?? -1)) : null;
+      unacked = null;
+    }
+    charts.backlog.push(m.t_ms, [backlog, unacked, m.buffered]);
     renderLinks(m.links ?? {});
   } else if (service === "ingest") {
     rates.ins = rate(m, before, "inserted") ?? rates.ins;

@@ -1,0 +1,30 @@
+{
+  "record": {
+    "amends": [
+      "003-infra",
+      "004-edge-producer",
+      "005-ingest-consumer",
+      "006-api-service",
+      "007-dashboard"
+    ],
+    "created": "2026-08-27",
+    "dependsOn": [
+      "001-architecture",
+      "002-telemetry-model"
+    ],
+    "id": "008-streams-migration",
+    "sectionHeadings": [
+      "008: Classic queues to RabbitMQ Streams",
+      "1. Purpose",
+      "2. The migration steps (each independently shippable)",
+      "3. Behavior (binding clauses)",
+      "4. Out of scope"
+    ],
+    "specPath": "specs/008-streams-migration/spec.md",
+    "status": "approved",
+    "summary": "The volume-driven migration of the frames data plane from the classic queue to a RabbitMQ Stream, executed as the incremental path a production system would take: dual-bind the stream alongside the queue (zero producer change), move the consumer to offset tracking with the offset stored transactionally with the data, then move the producer to the native stream protocol (a named dedup producer) to lift the confirm-path throughput ceiling. Replay becomes a first-class drill.\n",
+    "title": "Classic queues to RabbitMQ Streams: the migration lab"
+  },
+  "shardHash": "7a276133eabcfce922e3a7fe844ab938c04aebf0693d66af565f992a0459353a",
+  "specVersion": "1.1.0"
+}

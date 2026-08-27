@@ -6,6 +6,7 @@
 //! spec 005-ingest-consumer.
 
 mod consume;
+mod consume_stream;
 mod control;
 mod gap;
 mod sink;
@@ -49,9 +50,7 @@ async fn run(cfg: IngestConfig) -> anyhow::Result<()> {
         loop {
             let session = match cfg.common.mode {
                 Mode::Classic => consume::run_classic(&cfg, &mut counters, &mut gaps).await,
-                Mode::Stream => Err(anyhow::anyhow!(
-                    "stream mode lands in phase 3 (spec 008); set CB_MODE=classic"
-                )),
+                Mode::Stream => consume_stream::run_stream(&cfg, &mut counters, &mut gaps).await,
             };
             match session {
                 Ok(()) => return Ok::<(), anyhow::Error>(()),

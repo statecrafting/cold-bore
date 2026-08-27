@@ -11,8 +11,12 @@ pub const FRAMES_BINDING: &str = "frames.#";
 /// Dead-letter exchange + queue for poison frames.
 pub const FRAMES_DLX: &str = "cb.frames.dlx";
 pub const FRAMES_DLQ: &str = "cb.frames.dlq";
-/// Stream (stream mode data path, phase 3).
+/// The stream: a stream-type queue bound to the frames exchange alongside
+/// the classic queue, so every published frame lands in both transports and
+/// the consumer can migrate with zero producer change (spec 008).
 pub const FRAMES_STREAM: &str = "cb.frames.s";
+/// Server-side offset-tracking reference and the transactional-offset row key.
+pub const STREAM_CONSUMER_NAME: &str = "cb-ingest";
 
 /// Fanout exchange for control commands.
 pub const CONTROL_EXCHANGE: &str = "cb.control.x";

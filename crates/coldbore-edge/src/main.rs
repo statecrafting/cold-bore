@@ -11,10 +11,12 @@ mod faults;
 mod sim;
 mod telemetry;
 mod uplink;
+mod uplink_stream;
 
 use std::sync::Arc;
 
-use coldbore_proto::config::EdgeConfig;
+use coldbore_proto::config::{EdgeConfig, Mode};
+use coldbore_proto::now_ms;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -44,14 +46,21 @@ async fn run(cfg: EdgeConfig) -> anyhow::Result<()> {
     let faults = faults::FaultBox::new(cfg.pads);
     let counters = Arc::new(telemetry::Counters::default());
     let (tx, rx) = tokio::sync::mpsc::channel(8192);
+    // The producer generation: frame identity and the stream producer's
+    // dedup name both embed it.
+    let epoch = now_ms();
 
     let generator = tokio::spawn(sim::generator(
         cfg.clone(),
         faults.clone(),
         counters.clone(),
         tx,
+        epoch,
     ));
-    let uplink = tokio::spawn(uplink::run(cfg, faults, counters, rx));
+    let uplink = match cfg.common.mode {
+        Mode::Classic => tokio::spawn(uplink::run(cfg, faults, counters, rx)),
+        Mode::Stream => tokio::spawn(uplink_stream::run(cfg, faults, counters, rx, epoch)),
+    };
 
     tokio::signal::ctrl_c().await?;
     info!("shutting down");

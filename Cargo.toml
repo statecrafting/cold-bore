@@ -24,6 +24,7 @@ anyhow = "1"
 futures-util = "0.3"
 hdrhistogram = "7"
 lapin = "4"
+rabbitmq-stream-client = "0.11"
 rand = "0.10"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -11,6 +11,7 @@ spec = "005-ingest-consumer"
 
 [dependencies]
 coldbore-proto = { workspace = true }
+rabbitmq-stream-client = { workspace = true }
 anyhow = { workspace = true }
 futures-util = { workspace = true }
 hdrhistogram = { workspace = true }

@@ -81,6 +81,70 @@ impl Sink {
         Ok(inserted)
     }
 
+    /// Stream mode: batch insert + offset upsert in ONE transaction, so the
+    /// stored offset can never run ahead of (or behind) the data it covers.
+    /// Returns rows actually inserted.
+    pub async fn insert_batch_with_offset(
+        &mut self,
+        frames: &[Frame],
+        consumer: &str,
+        offset: u64,
+    ) -> anyhow::Result<u64> {
+        let tx = self.client.transaction().await?;
+        let inserted = {
+            let n = frames.len();
+            let mut times: Vec<SystemTime> = Vec::with_capacity(n);
+            let mut pads: Vec<i16> = Vec::with_capacity(n);
+            let mut wells: Vec<i16> = Vec::with_capacity(n);
+            let mut epochs: Vec<i64> = Vec::with_capacity(n);
+            let mut seqs: Vec<i64> = Vec::with_capacity(n);
+            let mut pressures: Vec<f32> = Vec::with_capacity(n);
+            let mut rates: Vec<f32> = Vec::with_capacity(n);
+            let mut proppants: Vec<f32> = Vec::with_capacity(n);
+            let mut temps: Vec<f32> = Vec::with_capacity(n);
+            for f in frames {
+                times.push(UNIX_EPOCH + Duration::from_millis(f.t_ms));
+                pads.push(f.pad as i16);
+                wells.push(f.well as i16);
+                epochs.push(f.epoch as i64);
+                seqs.push(f.seq as i64);
+                pressures.push(f.pressure_psi);
+                rates.push(f.rate_bpm);
+                proppants.push(f.proppant_ppa);
+                temps.push(f.temp_f);
+            }
+            tx.execute(
+                &self.insert,
+                &[
+                    &times, &pads, &wells, &epochs, &seqs, &pressures, &rates, &proppants, &temps,
+                ],
+            )
+            .await?
+        };
+        tx.execute(
+            "INSERT INTO stream_offsets (consumer, committed_offset, updated_at)
+             VALUES ($1, $2, now())
+             ON CONFLICT (consumer) DO UPDATE
+             SET committed_offset = EXCLUDED.committed_offset, updated_at = now()",
+            &[&consumer, &(offset as i64)],
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(inserted)
+    }
+
+    /// The transactionally stored offset for a consumer, if any.
+    pub async fn stored_offset(&self, consumer: &str) -> anyhow::Result<Option<u64>> {
+        let row = self
+            .client
+            .query_opt(
+                "SELECT committed_offset FROM stream_offsets WHERE consumer = $1",
+                &[&consumer],
+            )
+            .await?;
+        Ok(row.map(|r| r.get::<_, i64>(0) as u64))
+    }
+
     /// `(pad, well, epoch, max_seq)` for each well's newest epoch.
     pub async fn watermarks(&self) -> anyhow::Result<Vec<(u16, u16, u64, u64)>> {
         let rows = self.client.query(WATERMARKS_SQL, &[]).await?;

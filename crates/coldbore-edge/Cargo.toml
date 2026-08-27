@@ -14,6 +14,7 @@ coldbore-proto = { workspace = true }
 anyhow = { workspace = true }
 futures-util = { workspace = true }
 lapin = { workspace = true }
+rabbitmq-stream-client = { workspace = true }
 rand = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
