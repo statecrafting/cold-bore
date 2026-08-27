@@ -64,6 +64,18 @@ SELECT add_continuous_aggregate_policy('frames_1s',
     end_offset        => INTERVAL '2 seconds',
     schedule_interval => INTERVAL '2 seconds');
 
+-- ── stream_offsets: transactional consumer offsets (stream mode) ───────────
+-- The committed offset is updated in the SAME transaction as the batch
+-- insert, so a restarted stream consumer resumes exactly where the data
+-- actually ends: no re-read window beyond the crashed batch, no gap.
+-- Server-side offset tracking is also updated (best effort) for
+-- observability, but this row is the truth.
+CREATE TABLE stream_offsets (
+    consumer TEXT PRIMARY KEY,
+    committed_offset BIGINT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- ── events: faults, gaps, heals, lifecycle ──────────────────────────────────
 CREATE TABLE events (
     id      BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,

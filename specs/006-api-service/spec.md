@@ -49,6 +49,9 @@ the command contract), `app/main.py` (lifespan, routes), `tests/`.
   tab degrades its own feed, never the hub.
 - **Persistence**: events and metric snapshots land in their tables as they
   arrive; history reads go to `frames_1s`, never raw frames.
+- **Stream awareness** (spec 008 amendment): the broker poll includes the
+  stream's stats (retained records, consumers) under a `stream` key
+  alongside the classic queue's.
 - REST surface: `/api/status`, `/api/history`, `/api/wells`,
   `/api/completeness` (seq-span vs rows per well), `/api/events`,
   `POST /api/control`, `WS /ws`; the dashboard is served statically at `/`.

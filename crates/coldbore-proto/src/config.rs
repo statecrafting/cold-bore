@@ -69,6 +69,11 @@ pub struct CommonConfig {
     pub amqp_url: String,
     pub mode: Mode,
     pub metrics_interval_ms: u64,
+    /// Native stream protocol endpoint (port 5552) and credentials.
+    pub stream_host: String,
+    pub stream_port: u16,
+    pub stream_user: String,
+    pub stream_pass: String,
 }
 
 impl CommonConfig {
@@ -77,6 +82,10 @@ impl CommonConfig {
             amqp_url: env_string("CB_AMQP_URL", "amqp://coldbore:coldbore@localhost:5672/%2f"),
             mode: env_parse("CB_MODE", Mode::Classic)?,
             metrics_interval_ms: env_parse("CB_METRICS_INTERVAL_MS", 1000)?,
+            stream_host: env_string("CB_STREAM_HOST", "localhost"),
+            stream_port: env_parse("CB_STREAM_PORT", 5552)?,
+            stream_user: env_string("CB_STREAM_USER", "coldbore"),
+            stream_pass: env_string("CB_STREAM_PASS", "coldbore"),
         })
     }
 }
@@ -107,6 +116,35 @@ impl EdgeConfig {
     }
 }
 
+/// Where a stream-mode consumer starts when no transactionally stored
+/// offset exists (a stored offset always wins: `resume` semantics).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StreamFrom {
+    /// The stream's first retained record (full replay). The default.
+    First,
+    /// Only records published after subscription.
+    Next,
+    /// An explicit offset.
+    Offset(u64),
+}
+
+impl FromStr for StreamFrom {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "first" => Ok(StreamFrom::First),
+            "next" => Ok(StreamFrom::Next),
+            other => match other.strip_prefix("offset:") {
+                Some(n) => n
+                    .parse()
+                    .map(StreamFrom::Offset)
+                    .map_err(|e| format!("bad offset in {other:?}: {e}")),
+                None => Err(format!("expected first|next|offset:N, got {other:?}")),
+            },
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct IngestConfig {
     pub common: CommonConfig,
@@ -114,6 +152,11 @@ pub struct IngestConfig {
     pub prefetch: u16,
     pub batch_max_frames: usize,
     pub batch_max_ms: u64,
+    /// Stream mode: start position when no stored offset exists.
+    pub stream_from: StreamFrom,
+    /// Stream mode: ignore the stored offset and force `stream_from`
+    /// (the replay drill switch).
+    pub stream_force_from: bool,
 }
 
 impl IngestConfig {
@@ -127,6 +170,8 @@ impl IngestConfig {
             prefetch: env_parse("CB_PREFETCH", 512)?,
             batch_max_frames: env_parse("CB_BATCH_MAX_FRAMES", 500)?,
             batch_max_ms: env_parse("CB_BATCH_MAX_MS", 200)?,
+            stream_from: env_parse("CB_STREAM_FROM", StreamFrom::First)?,
+            stream_force_from: env_parse("CB_STREAM_FORCE_FROM", false)?,
         })
     }
 }
@@ -134,6 +179,17 @@ impl IngestConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stream_from_parses() {
+        assert_eq!("first".parse::<StreamFrom>(), Ok(StreamFrom::First));
+        assert_eq!("next".parse::<StreamFrom>(), Ok(StreamFrom::Next));
+        assert_eq!(
+            "offset:42".parse::<StreamFrom>(),
+            Ok(StreamFrom::Offset(42))
+        );
+        assert!("last".parse::<StreamFrom>().is_err());
+    }
 
     #[test]
     fn mode_parses() {

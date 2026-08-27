@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import TypeAdapter, ValidationError
 
 from . import db
-from .broker import FRAMES_QUEUE, Broker
+from .broker import Broker
 from .config import settings
 from .control import ControlCommand
 from .mgmt import MgmtPoller
@@ -77,7 +77,7 @@ async def _connect_with_retry() -> None:
 async def _poll_broker_stats() -> None:
     global latest_broker
     while True:
-        stats = await mgmt.queue_stats(FRAMES_QUEUE)
+        stats = await mgmt.all_stats()
         if stats:
             latest_broker = stats
             hub.broadcast(json.dumps({"type": "broker", "data": stats}))

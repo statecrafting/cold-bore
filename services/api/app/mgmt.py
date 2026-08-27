@@ -24,6 +24,22 @@ class MgmtPoller:
     async def close(self) -> None:
         await self._client.aclose()
 
+    async def all_stats(self) -> dict[str, Any]:
+        """Classic queue stats plus the stream's, under a `stream` key. The
+        stream appears in the queues API too; its `messages` is total
+        retained records (offsets are dense from 0 in a lab session, so
+        `messages - 1 - committed_offset` is the consumer's lag)."""
+        stats = await self.queue_stats("cb.frames.q")
+        stream = await self.queue_stats("cb.frames.s")
+        if stream:
+            stats = stats or {}
+            stats["stream"] = {
+                "messages": stream.get("depth", 0),
+                "publish_rate": stream.get("publish_rate", 0.0),
+                "consumers": stream.get("consumers", 0),
+            }
+        return stats
+
     async def queue_stats(self, queue: str = "cb.frames.q", vhost: str = "%2F") -> dict[str, Any]:
         """One poll; {} when the queue does not exist yet or the broker is
         unreachable (both normal during startup and drills)."""

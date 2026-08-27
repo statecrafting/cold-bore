@@ -61,7 +61,16 @@ the truth about what was and was not delivered.
   arriving while disconnected buffer per pad; unconfirmed in-flight frames
   are reaped into the retry queue before the session ends.
 
+- **Stream mode** (spec 008 amendment): `CB_MODE=stream` publishes
+  straight to the stream in batches over the native protocol as a named
+  dedup producer (`cb-edge-{epoch}`); publishing ids are monotonic,
+  retransmissions reuse their id (broker-level dedup of confirm-loss
+  duplicates), injected dups take fresh ids, and confirmations presumed
+  lost sweep back to retransmission after 10 s. Custody rules are
+  identical to classic mode; the AMQP connection remains for control,
+  telemetry, and topology.
+
 ## 4. Out of scope
 
-Stream-protocol publishing (phase 3 amends this spec); disk-backed buffers
-(decision log §14); waveform realism beyond plausible ranges.
+Disk-backed buffers (decision log §14); waveform realism beyond plausible
+ranges; superstream partitioning.

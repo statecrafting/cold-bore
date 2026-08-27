@@ -68,7 +68,16 @@ declaration), `sink` (batched UNNEST insert, ON CONFLICT DO NOTHING),
   reconnects with capped backoff; unacked deliveries redeliver and are
   absorbed.
 
+- **Stream mode** (spec 008 amendment): `CB_MODE=stream` consumes the
+  stream via the native protocol; the committed offset is stored in the
+  same database transaction as its batch (`stream_offsets`), making
+  restart resume exact (no re-read window). Broker-side offset storage is
+  best-effort observability. Poison is counted and skipped (reads are
+  non-destructive; there is no DLQ). Replay: `CB_STREAM_FORCE_FROM` +
+  `CB_STREAM_FROM` re-materialize from any position; the idempotent sink
+  absorbs any overlap.
+
 ## 4. Out of scope
 
-Stream-mode consumption and offset management (phase 3 amends this spec);
-competing-consumer scaling (documented follow-on, architecture doc §14).
+Competing-consumer scaling (documented follow-on, architecture doc §14);
+superstream partitioning.

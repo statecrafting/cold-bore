@@ -29,7 +29,7 @@ This spec owns `docs/design/architecture.md`. The architecture document is
 normative for:
 
 - the three-plane broker topology (data, control, telemetry) and the object
-  names in its §3;
+  names in its §3 (the stream's dual binding is spec 008's amendment);
 - the frame contract (§4), including that `seq` is assigned only by the
   edge, monotonic per `(pad, well)` within a producer generation, and that
   pipeline-wide identity (idempotency and gap key) is

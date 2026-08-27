@@ -10,27 +10,28 @@
 use std::time::Duration;
 
 use coldbore_proto::config::IngestConfig;
-use coldbore_proto::metrics::{IngestMetrics, LatencyPercentiles, event_kind};
+use coldbore_proto::metrics::event_kind;
 use coldbore_proto::topology::{
     CONTROL_EXCHANGE, FRAMES_BINDING, FRAMES_DLQ, FRAMES_DLX, FRAMES_EXCHANGE, FRAMES_QUEUE,
-    TELEMETRY_EXCHANGE, events_routing_key, metrics_routing_key,
+    FRAMES_STREAM, TELEMETRY_EXCHANGE,
 };
 use coldbore_proto::{Frame, now_ms};
 use futures_util::StreamExt;
 use hdrhistogram::Histogram;
 use lapin::message::Delivery;
 use lapin::options::{
-    BasicAckOptions, BasicConsumeOptions, BasicPublishOptions, BasicQosOptions, BasicRejectOptions,
+    BasicAckOptions, BasicConsumeOptions, BasicQosOptions, BasicRejectOptions,
     ExchangeDeclareOptions, QueueBindOptions, QueueDeclareOptions,
 };
 use lapin::types::{AMQPValue, FieldTable};
-use lapin::{BasicProperties, Channel, Connection, ConnectionProperties, ExchangeKind};
+use lapin::{Channel, Connection, ConnectionProperties, ExchangeKind};
 use serde_json::json;
 use tracing::{info, warn};
 
-use crate::gap::{GapChange, GapTracker};
+use crate::control;
+use crate::gap::GapTracker;
 use crate::sink::Sink;
-use crate::{control, telemetry::Counters};
+use crate::telemetry::{self, Counters};
 
 /// One connected consume session. Returns `Err` when the broker or database
 /// connection dies; the supervisor in `main` reconnects. `gaps` and
@@ -70,7 +71,7 @@ pub async fn run_classic(
         )
         .await?;
     info!(prefetch = cfg.prefetch, "consuming from classic queue");
-    let _ = publish_event(
+    let _ = telemetry::publish_event(
         &channel,
         event_kind::SERVICE_STARTED,
         json!({"mode": "classic", "prefetch": cfg.prefetch}),
@@ -112,7 +113,8 @@ pub async fn run_classic(
                 }
             }
             _ = metrics_tick.tick() => {
-                publish_metrics(&channel, cfg, counters, gaps, &mut hist).await;
+                telemetry::publish_metrics(&channel, "classic", counters, gaps, &mut hist, None)
+                    .await;
             }
         }
     };
@@ -170,7 +172,7 @@ async fn flush(
     for frame in batch.iter() {
         hist.saturating_record(now.saturating_sub(frame.t_ms).max(1));
         for change in gaps.observe(frame.pad, frame.well, frame.epoch, frame.seq, now) {
-            publish_gap_event(channel, &change).await;
+            telemetry::publish_gap_event(channel, &change).await;
         }
     }
 
@@ -183,107 +185,10 @@ async fn flush(
     Ok(())
 }
 
-async fn publish_metrics(
-    channel: &Channel,
-    cfg: &IngestConfig,
-    counters: &Counters,
-    gaps: &GapTracker,
-    hist: &mut Histogram<u64>,
-) {
-    let e2e = if !hist.is_empty() {
-        Some(LatencyPercentiles {
-            p50_ms: hist.value_at_quantile(0.50) as f64,
-            p95_ms: hist.value_at_quantile(0.95) as f64,
-            p99_ms: hist.value_at_quantile(0.99) as f64,
-            max_ms: hist.max() as f64,
-        })
-    } else {
-        None
-    };
-    hist.reset();
-    let snapshot = IngestMetrics {
-        service: "ingest".to_string(),
-        t_ms: now_ms(),
-        mode: cfg.common.mode.as_str().to_string(),
-        consumed: counters.consumed,
-        inserted: counters.inserted,
-        dup_dropped: counters.dup_dropped,
-        poison: counters.poison,
-        redeliveries: counters.redeliveries,
-        batches: counters.batches,
-        open_gaps: gaps.open_now(),
-        gaps_opened: gaps.opened(),
-        gaps_healed: gaps.healed(),
-        e2e,
-        committed_offset: None,
-    };
-    let body = serde_json::to_vec(&snapshot).unwrap_or_default();
-    if let Err(e) = channel
-        .basic_publish(
-            TELEMETRY_EXCHANGE.into(),
-            metrics_routing_key("ingest").into(),
-            BasicPublishOptions::default(),
-            &body,
-            BasicProperties::default().with_content_type("application/json".into()),
-        )
-        .await
-    {
-        warn!(error = %e, "metrics publish failed");
-    }
-}
-
-async fn publish_gap_event(channel: &Channel, change: &GapChange) {
-    let (kind, payload) = match *change {
-        GapChange::Opened {
-            pad,
-            well,
-            from,
-            to,
-        } => (
-            event_kind::GAP_OPENED,
-            json!({"pad": pad, "well": well, "from": from, "to": to, "span": to - from + 1}),
-        ),
-        GapChange::Healed {
-            pad,
-            well,
-            from,
-            to,
-            after_ms,
-        } => (
-            event_kind::GAP_HEALED,
-            json!({"pad": pad, "well": well, "from": from, "to": to, "span": to - from + 1, "after_ms": after_ms}),
-        ),
-    };
-    let _ = publish_event(channel, kind, payload).await;
-}
-
-async fn publish_event(
-    channel: &Channel,
-    kind: &str,
-    payload: serde_json::Value,
-) -> lapin::Result<()> {
-    let event = coldbore_proto::Event {
-        kind: kind.to_string(),
-        service: "ingest".to_string(),
-        t_ms: now_ms(),
-        payload,
-    };
-    let body = serde_json::to_vec(&event).unwrap_or_default();
-    channel
-        .basic_publish(
-            TELEMETRY_EXCHANGE.into(),
-            events_routing_key(kind).into(),
-            BasicPublishOptions::default(),
-            &body,
-            BasicProperties::default().with_content_type("application/json".into()),
-        )
-        .await
-        .map(|_| ())
-}
-
-/// Idempotent topology declaration: exchanges, the DLX pair, and the frames
-/// queue wired to dead-letter into it.
-async fn declare_topology(channel: &Channel) -> lapin::Result<()> {
+/// Idempotent topology declaration: exchanges, the DLX pair, the frames
+/// queue wired to dead-letter into it, and the stream. Shared with the
+/// stream-mode loop (consume_stream.rs).
+pub(crate) async fn declare_topology(channel: &Channel) -> lapin::Result<()> {
     let durable_exchange = ExchangeDeclareOptions {
         durable: true,
         ..ExchangeDeclareOptions::default()
@@ -349,6 +254,31 @@ async fn declare_topology(channel: &Channel) -> lapin::Result<()> {
     channel
         .queue_bind(
             FRAMES_QUEUE.into(),
+            FRAMES_EXCHANGE.into(),
+            FRAMES_BINDING.into(),
+            QueueBindOptions::default(),
+            FieldTable::default(),
+        )
+        .await?;
+
+    // The stream, bound alongside the classic queue: every frame published
+    // to the exchange lands in both transports, so consumers can migrate
+    // (and replay) with zero producer change. Spec 008.
+    let mut stream_args = FieldTable::default();
+    stream_args.insert(
+        "x-queue-type".into(),
+        AMQPValue::LongString("stream".into()),
+    );
+    stream_args.insert(
+        "x-max-length-bytes".into(),
+        AMQPValue::LongLongInt(2_000_000_000),
+    );
+    channel
+        .queue_declare(FRAMES_STREAM.into(), durable_queue, stream_args)
+        .await?;
+    channel
+        .queue_bind(
+            FRAMES_STREAM.into(),
             FRAMES_EXCHANGE.into(),
             FRAMES_BINDING.into(),
             QueueBindOptions::default(),

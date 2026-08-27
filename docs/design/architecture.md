@@ -80,7 +80,7 @@ the JSON schemas in this document are the cross-language contract.
 | `cb.frames.x` | topic exchange, durable | routing key `frames.pad{P}.well{W}` |
 | `cb.frames.q` | classic queue, durable | bound `frames.#`; DLX to `cb.frames.dlx` |
 | `cb.frames.dlx` / `cb.frames.dlq` | fanout exchange + queue | poison frames (unparseable, schema-invalid) |
-| `cb.frames.s` | stream | phase 3; native stream protocol (port 5552) |
+| `cb.frames.s` | stream, 2 GB retention | dual-bound `frames.#` to the exchange (spec 008): AMQP publishes land in both transports; native protocol (port 5552) for stream-mode produce/consume |
 | `cb.control.x` | fanout exchange, durable | services bind exclusive auto-delete queues |
 | `cb.telemetry.x` | topic exchange, durable | `metrics.{service}`, `events.{kind}` |
 | `cb.telemetry.api.q` | queue, auto-delete | api's binding to `metrics.#` and `events.#` |
@@ -325,7 +325,7 @@ skin is thin by design and cut first if time pressure demands.
 |---|---|---|
 | 0 | Governance, this document, CI gates | 000, 001 |
 | 1 | Pipeline straight through in classic mode, baseline numbers | 002 proto, 003 infra, 004 edge, 005 ingest, 006 api, 007 dashboard |
-| 2 | Fault injection, gap machinery, live SLO dashboard | amendments to 004/005/006/007 |
+| 2 | Fault injection, gap machinery, live SLO dashboard | absorbed into phase 1 (the drills demanded it) |
 | 3 | Streams mode, replay, A/B write-up | 008 streams migration |
 | 4 | Scenario engine, scoring, polish | 009 scenarios |
 

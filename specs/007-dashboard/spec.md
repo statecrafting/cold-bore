@@ -45,6 +45,10 @@ canvas line charts with crosshair + tooltip hover).
 - The fault console posts spec-002 commands to `/api/control` verbatim; pad
   link state renders from edge metrics (the truth), not from local button
   state.
+- The backlog series is transport-aware (spec 008 amendment): queue depth
+  and unacked in classic mode; `retained - 1 - committed offset` in stream
+  mode (mgmt chunk-lag caveat documented), with the edge buffer series
+  common to both.
 - WebSocket reconnects with capped backoff; the connection badge always
   states the truth.
 

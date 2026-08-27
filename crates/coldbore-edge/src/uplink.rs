@@ -35,27 +35,29 @@ use crate::control;
 use crate::faults::FaultBox;
 use crate::telemetry::{self, Counters};
 
-/// State that survives reconnects: frames in edge custody.
-struct UplinkState {
+/// State that survives reconnects: frames in edge custody. Shared by the
+/// classic (AMQP) and stream (native protocol) publishers: custody is
+/// transport-neutral.
+pub(crate) struct UplinkState {
     /// Per-pad uplink queues; store-and-forward is these queues not draining.
     pad_buffers: BTreeMap<u16, VecDeque<Frame>>,
     /// Frames that failed a publish or were nacked: front of the line.
-    retry: VecDeque<Frame>,
+    pub(crate) retry: VecDeque<Frame>,
     /// Injected duplicates awaiting publish.
-    dup_queue: VecDeque<Frame>,
+    pub(crate) dup_queue: VecDeque<Frame>,
     /// Reorder fault: frames held until the shuffle window fills.
     shuffle: Vec<Frame>,
     /// Frames staged for publish (post-reorder).
     publish_queue: VecDeque<Frame>,
     buffer_cap: usize,
-    backoff: Duration,
+    pub(crate) backoff: Duration,
 }
 
-const INITIAL_BACKOFF: Duration = Duration::from_millis(500);
-const MAX_BACKOFF: Duration = Duration::from_secs(10);
+pub(crate) const INITIAL_BACKOFF: Duration = Duration::from_millis(500);
+pub(crate) const MAX_BACKOFF: Duration = Duration::from_secs(10);
 
 impl UplinkState {
-    fn new(cfg: &EdgeConfig) -> Self {
+    pub(crate) fn new(cfg: &EdgeConfig) -> Self {
         Self {
             pad_buffers: (1..=cfg.pads).map(|p| (p, VecDeque::new())).collect(),
             retry: VecDeque::new(),
@@ -70,7 +72,7 @@ impl UplinkState {
     /// Every live frame enters its pad queue; publishability is decided at
     /// drain time. Bounded: at capacity the oldest frame drops (counted),
     /// architecture doc §5.2.
-    fn buffer_frame(&mut self, frame: Frame, counters: &Counters) {
+    pub(crate) fn buffer_frame(&mut self, frame: Frame, counters: &Counters) {
         let buf = self.pad_buffers.entry(frame.pad).or_default();
         if buf.len() >= self.buffer_cap {
             buf.pop_front();
@@ -80,7 +82,7 @@ impl UplinkState {
     }
 
     /// Frames currently in store-and-forward custody.
-    fn buffered(&self) -> u64 {
+    pub(crate) fn buffered(&self) -> u64 {
         self.pad_buffers
             .values()
             .map(|b| b.len() as u64)
@@ -93,7 +95,7 @@ impl UplinkState {
     /// Pull the next frame to put on the wire. Priority: retransmits, then
     /// injected duplicates, then pad queues (link-up pads only) through the
     /// reorder stage.
-    fn next_publishable(&mut self, faults: &FaultBox) -> Option<(Frame, bool)> {
+    pub(crate) fn next_publishable(&mut self, faults: &FaultBox) -> Option<(Frame, bool)> {
         if let Some(f) = self.retry.pop_front() {
             return Some((f, false));
         }
@@ -220,9 +222,10 @@ async fn connect_and_serve(
 /// MUST stay byte-identical to the ingest's declaration in
 /// crates/coldbore-ingest/src/consume.rs (a mismatch is a broker
 /// PRECONDITION_FAILED at startup).
-async fn declare_topology(channel: &Channel) -> lapin::Result<()> {
+pub(crate) async fn declare_topology(channel: &Channel) -> lapin::Result<()> {
     use coldbore_proto::topology::{
-        CONTROL_EXCHANGE, FRAMES_BINDING, FRAMES_DLQ, FRAMES_DLX, FRAMES_QUEUE, TELEMETRY_EXCHANGE,
+        CONTROL_EXCHANGE, FRAMES_BINDING, FRAMES_DLQ, FRAMES_DLX, FRAMES_QUEUE, FRAMES_STREAM,
+        TELEMETRY_EXCHANGE,
     };
     use lapin::options::{QueueBindOptions, QueueDeclareOptions};
     use lapin::types::AMQPValue;
@@ -291,6 +294,31 @@ async fn declare_topology(channel: &Channel) -> lapin::Result<()> {
     channel
         .queue_bind(
             FRAMES_QUEUE.into(),
+            FRAMES_EXCHANGE.into(),
+            FRAMES_BINDING.into(),
+            QueueBindOptions::default(),
+            FieldTable::default(),
+        )
+        .await?;
+
+    // The stream, bound alongside the classic queue: every frame published
+    // to the exchange lands in both transports, so consumers can migrate
+    // (and replay) with zero producer change. Spec 008.
+    let mut stream_args = FieldTable::default();
+    stream_args.insert(
+        "x-queue-type".into(),
+        AMQPValue::LongString("stream".into()),
+    );
+    stream_args.insert(
+        "x-max-length-bytes".into(),
+        AMQPValue::LongLongInt(2_000_000_000),
+    );
+    channel
+        .queue_declare(FRAMES_STREAM.into(), durable_queue, stream_args)
+        .await?;
+    channel
+        .queue_bind(
+            FRAMES_STREAM.into(),
             FRAMES_EXCHANGE.into(),
             FRAMES_BINDING.into(),
             QueueBindOptions::default(),
@@ -431,6 +459,10 @@ mod tests {
                 amqp_url: String::new(),
                 mode: coldbore_proto::config::Mode::Classic,
                 metrics_interval_ms: 1000,
+                stream_host: String::new(),
+                stream_port: 5552,
+                stream_user: String::new(),
+                stream_pass: String::new(),
             },
             pads: 2,
             wells_per_pad: 1,

@@ -1,0 +1,20 @@
+{
+  "mapping": {
+    "amends": [
+      "003-infra",
+      "004-edge-producer",
+      "005-ingest-consumer",
+      "006-api-service",
+      "007-dashboard"
+    ],
+    "dependsOn": [
+      "001-architecture",
+      "002-telemetry-model"
+    ],
+    "implementingPaths": [],
+    "specId": "008-streams-migration",
+    "specStatus": "approved"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "eb434b01b1f52ed01a950993786b28eda833448fbab65233f093eff141fb4d75"
+}
