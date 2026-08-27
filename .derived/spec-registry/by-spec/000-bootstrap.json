@@ -1,0 +1,28 @@
+{
+  "record": {
+    "created": "2026-08-27",
+    "id": "000-bootstrap",
+    "origin": {
+      "retroactive": true
+    },
+    "sectionHeadings": [
+      "000: Bootstrap the cold-bore spec system",
+      "1. The authoring / derived boundary",
+      "2. The typed authority graph",
+      "3. The refusal rule"
+    ],
+    "specPath": "specs/000-bootstrap/spec.md",
+    "status": "approved",
+    "summary": "Foundational contract: authored truth lives only in markdown (+ YAML frontmatter); machine-consumable truth is compiler-emitted JSON only; every artifact is a deterministic function of (config, file contents); a typed authority graph governs who-owns-what.\n",
+    "title": "Bootstrap the cold-bore spec system",
+    "unamendable": [
+      "markdown-truth-boundary",
+      "json-truth-boundary",
+      "determinism-requirement",
+      "typed-authority-graph",
+      "refusal-rule"
+    ]
+  },
+  "shardHash": "d87d75645bf3fd783209fbc86405b5d505c6da7fcb5323f220121adb7999d94b",
+  "specVersion": "1.1.0"
+}
