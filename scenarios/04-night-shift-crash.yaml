@@ -1,0 +1,21 @@
+# The consumer dies mid-shift at elevated volume. The supervisor restarts
+# it; the backlog must drain and every redelivered frame must be absorbed.
+id: 04-night-shift-crash
+title: Night Shift Crash
+tagline: The ingest dies at 5x volume. Recovery is measured, not assumed.
+duration_s: 90
+objectives:
+  completeness_pct: 100
+  max_p99_ms: 20000
+  recovery_s: 40
+timeline:
+  - at: 8
+    cmd: { cmd: rate, multiplier: 5 }
+  - at: 20
+    cmd: { cmd: kill, service: ingest }
+  - at: 70
+    cmd: { cmd: rate, multiplier: 1 }
+scoring:
+  completeness: 55
+  latency: 15
+  recovery: 30

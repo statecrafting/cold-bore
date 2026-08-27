@@ -52,7 +52,12 @@ canvas line charts with crosshair + tooltip hover).
 - WebSocket reconnects with capped backoff; the connection badge always
   states the truth.
 
+- **Scenario console** (spec 009 amendment): scenario cards with run
+  buttons, a live-run banner (countdown, steps fired), the score card
+  (grade, component breakdown, detail line) driven by `scenario_scored`
+  events, and the poison injector button.
+
 ## 4. Out of scope
 
-Scenario UI and scoring display (phase 4 amends this spec); historical
-chart backfill beyond the live window; mobile layouts beyond basic reflow.
+Historical chart backfill beyond the live window; mobile layouts beyond
+basic reflow; scenario editing UI.

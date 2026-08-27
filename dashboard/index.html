@@ -53,6 +53,13 @@
   </section>
 
   <div class="columns">
+    <section class="panel" aria-label="scenarios">
+      <h2>Scenarios <span class="unit">the night shift</span></h2>
+      <div id="scenario-active" class="scenario-active" hidden></div>
+      <div id="scenario-score" class="scenario-score" hidden></div>
+      <div id="scenario-list" class="scenario-list"></div>
+    </section>
+
     <section class="panel" aria-label="fault console">
       <h2>Fault console</h2>
       <div class="fault-grid">
@@ -93,6 +100,7 @@
           <div class="btn-row">
             <button id="kill-ingest" class="danger">kill ingest</button>
             <button id="kill-edge" class="danger">kill edge</button>
+            <button id="poison" class="danger">inject poison</button>
           </div>
         </div>
         <div class="fault-row">

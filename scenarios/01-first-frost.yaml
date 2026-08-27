@@ -1,0 +1,20 @@
+# The classic field reality: a pad drops off the map, then comes back.
+# Store-and-forward must cover the outage; the score is whether the night
+# shift ends with every frame accounted for.
+id: 01-first-frost
+title: First Frost
+tagline: Pad 2 loses its uplink in a cold snap. Nothing may be lost.
+duration_s: 90
+objectives:
+  completeness_pct: 100
+  max_p99_ms: 2000
+  recovery_s: 30
+timeline:
+  - at: 10
+    cmd: { cmd: link, pad: 2, state: down }
+  - at: 55
+    cmd: { cmd: link, pad: 2, state: up }
+scoring:
+  completeness: 60
+  latency: 15
+  recovery: 25

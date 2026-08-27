@@ -1,0 +1,35 @@
+{
+  "record": {
+    "amends": [
+      "006-api-service",
+      "007-dashboard",
+      "003-infra"
+    ],
+    "created": "2026-08-27",
+    "dependsOn": [
+      "001-architecture",
+      "002-telemetry-model"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "scenarios/"
+      }
+    ],
+    "id": "009-scenarios",
+    "sectionHeadings": [
+      "009: Scenarios and scoring",
+      "1. Purpose",
+      "2. Territory",
+      "3. The scenario grammar",
+      "4. Behavior",
+      "5. Out of scope"
+    ],
+    "specPath": "specs/009-scenarios/spec.md",
+    "status": "approved",
+    "summary": "The night-shift game: YAML scenarios are timelines of control commands with SLO objectives and scoring weights. The api's engine fires the timeline, clears all faults, lets the pipeline settle, and scores the shift from SQL over what actually landed (completeness from seq spans, latency from metric snapshots, recovery from the last fault to the first in-SLO snapshot). Every scenario is a named, repeatable experiment.\n",
+    "title": "Scenarios and scoring: the game layer"
+  },
+  "shardHash": "b011aae9251f9f4a93dced84acaa069e18f0988828fa7eec7155f2d44839faae",
+  "specVersion": "1.1.0"
+}

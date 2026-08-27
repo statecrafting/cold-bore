@@ -22,6 +22,7 @@ from .broker import Broker
 from .config import settings
 from .control import ControlCommand
 from .mgmt import MgmtPoller
+from .scenarios import Engine
 from .ws import Hub
 
 log = logging.getLogger("coldbore.api")
@@ -37,6 +38,11 @@ mgmt = MgmtPoller(settings)
 pool: asyncpg.Pool | None = None
 latest_broker: dict = {}
 _tasks: list[asyncio.Task] = []
+engine = Engine(
+    pool_getter=lambda: pool,
+    publish_control=lambda cmd: broker.publish_control(cmd),
+    broadcast=lambda msg: hub.broadcast(msg),
+)
 
 
 async def _on_metric(service: str, payload: dict) -> None:
@@ -154,6 +160,36 @@ async def get_events(limit: int = Query(default=100, ge=1, le=1000)) -> list:
     if pool is None:
         raise HTTPException(503, "database not connected")
     return await db.recent_events(pool, limit)
+
+
+@app.get("/api/scenarios")
+async def list_scenarios() -> dict:
+    return {"scenarios": engine.listing(), "active": engine.active}
+
+
+@app.post("/api/scenarios/{scenario_id}/start")
+async def start_scenario(scenario_id: str) -> dict:
+    try:
+        active = await engine.start(scenario_id)
+    except KeyError as exc:
+        raise HTTPException(404, f"unknown scenario {scenario_id}") from exc
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return {"ok": True, "active": active}
+
+
+@app.get("/api/runs")
+async def list_runs(limit: int = Query(default=20, ge=1, le=200)) -> list:
+    return await engine.runs(limit)
+
+
+@app.post("/api/debug/poison")
+async def inject_poison() -> dict:
+    try:
+        await broker.publish_poison()
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    return {"ok": True}
 
 
 @app.post("/api/control")

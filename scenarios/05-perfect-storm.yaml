@@ -1,0 +1,35 @@
+# Everything at once: two pads dark, duplicates, reordering, 10x volume.
+# The graduation exercise.
+id: 05-perfect-storm
+title: Perfect Storm
+tagline: Two pads dark, duplicate storm, scrambled order, 10x volume. Hold the line.
+duration_s: 150
+objectives:
+  completeness_pct: 100
+  max_p99_ms: 30000
+  recovery_s: 60
+timeline:
+  - at: 10
+    cmd: { cmd: rate, multiplier: 10 }
+  - at: 20
+    cmd: { cmd: link, pad: 1, state: down }
+  - at: 25
+    cmd: { cmd: dup, rate: 0.1 }
+  - at: 30
+    cmd: { cmd: reorder, window: 64 }
+  - at: 45
+    cmd: { cmd: link, pad: 3, state: down }
+  - at: 75
+    cmd: { cmd: link, pad: 1, state: up }
+  - at: 90
+    cmd: { cmd: link, pad: 3, state: up }
+  - at: 100
+    cmd: { cmd: dup, rate: 0.0 }
+  - at: 105
+    cmd: { cmd: reorder, window: 0 }
+  - at: 115
+    cmd: { cmd: rate, multiplier: 1 }
+scoring:
+  completeness: 60
+  latency: 15
+  recovery: 25

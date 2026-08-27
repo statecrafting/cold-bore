@@ -1,12 +1,17 @@
 {
   "mapping": {
+    "amends": [
+      "006-api-service",
+      "007-dashboard",
+      "003-infra"
+    ],
     "dependsOn": [
       "001-architecture",
-      "006-api-service"
+      "002-telemetry-model"
     ],
     "implementingPaths": [
       {
-        "path": "dashboard/",
+        "path": "scenarios/",
         "source": "spec-edge"
       }
     ],
@@ -14,20 +19,20 @@
       {
         "locations": [
           {
-            "file": "dashboard/"
+            "file": "scenarios/"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "dashboard/"
+          "path": "scenarios/"
         }
       }
     ],
-    "specId": "007-dashboard",
+    "specId": "009-scenarios",
     "specStatus": "approved"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "68a731f67321ebd6503d2e9cbd1b5fa05990eb6c29ee76687b8add66b9d91304"
+  "shardHash": "bc97bec4cde892c01878bbd19b6c7a03d938a10e9f9b7c19e22ad44c67f49c66"
 }

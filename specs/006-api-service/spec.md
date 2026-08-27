@@ -56,7 +56,14 @@ the command contract), `app/main.py` (lifespan, routes), `tests/`.
   `/api/completeness` (seq-span vs rows per well), `/api/events`,
   `POST /api/control`, `WS /ws`; the dashboard is served statically at `/`.
 
+- **Scenario engine** (spec 009 amendment): `app/scenarios.py` runs one
+  YAML scenario at a time (timeline of validated control commands, ending
+  in `reset` + settle), scores it exclusively from the database, persists
+  runs, and emits `scenario_*` events; routes `/api/scenarios`,
+  `/api/scenarios/{id}/start`, `/api/runs`, plus the broker-side poison
+  injector `/api/debug/poison`.
+
 ## 4. Out of scope
 
-The scenario/scoring engine (phase 4 amends this spec); authentication (a
-localhost lab); Kafka egress (out of v1 scope entirely).
+Authentication (a localhost lab); Kafka egress (out of v1 scope
+entirely).
