@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>cold-bore · night shift</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="brand">
+    <span class="brand-name">cold-bore</span>
+    <span class="brand-sub">night shift console</span>
+  </div>
+  <div class="header-status">
+    <span id="mode-badge" class="badge">mode: …</span>
+    <span id="conn-badge" class="badge badge-bad">ws: connecting</span>
+  </div>
+</header>
+
+<main>
+  <section id="tiles" class="tiles" aria-label="pipeline totals"></section>
+
+  <section class="charts">
+    <div class="chart-card">
+      <div class="chart-head">
+        <h2>Throughput <span class="unit">frames/s</span></h2>
+        <div class="legend" id="legend-throughput"></div>
+      </div>
+      <canvas id="chart-throughput"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-head">
+        <h2>Backlog <span class="unit">frames</span></h2>
+        <div class="legend" id="legend-backlog"></div>
+      </div>
+      <canvas id="chart-backlog"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-head">
+        <h2>End-to-end latency <span class="unit">ms</span></h2>
+        <div class="legend" id="legend-latency"></div>
+      </div>
+      <canvas id="chart-latency"></canvas>
+    </div>
+    <div class="chart-card">
+      <div class="chart-head">
+        <h2>Absorbed <span class="unit">per second</span></h2>
+        <div class="legend" id="legend-absorbed"></div>
+      </div>
+      <canvas id="chart-absorbed"></canvas>
+    </div>
+  </section>
+
+  <div class="columns">
+    <section class="panel" aria-label="fault console">
+      <h2>Fault console</h2>
+      <div class="fault-grid">
+        <div class="fault-row">
+          <span class="fault-label">Pad uplinks</span>
+          <div id="link-buttons" class="btn-row"></div>
+        </div>
+        <div class="fault-row">
+          <span class="fault-label">Duplicates</span>
+          <div class="btn-row" data-cmd="dup">
+            <button data-rate="0">off</button>
+            <button data-rate="0.01">1%</button>
+            <button data-rate="0.05">5%</button>
+            <button data-rate="0.2">20%</button>
+          </div>
+        </div>
+        <div class="fault-row">
+          <span class="fault-label">Reorder</span>
+          <div class="btn-row" data-cmd="reorder">
+            <button data-window="0">off</button>
+            <button data-window="16">w16</button>
+            <button data-window="64">w64</button>
+            <button data-window="256">w256</button>
+          </div>
+        </div>
+        <div class="fault-row">
+          <span class="fault-label">Volume</span>
+          <div class="btn-row" data-cmd="rate">
+            <button data-mult="1">1x</button>
+            <button data-mult="5">5x</button>
+            <button data-mult="10">10x</button>
+            <button data-mult="20">20x</button>
+            <button data-mult="50">50x</button>
+          </div>
+        </div>
+        <div class="fault-row">
+          <span class="fault-label">Crash drills</span>
+          <div class="btn-row">
+            <button id="kill-ingest" class="danger">kill ingest</button>
+            <button id="kill-edge" class="danger">kill edge</button>
+          </div>
+        </div>
+        <div class="fault-row">
+          <span class="fault-label"></span>
+          <div class="btn-row"><button id="reset-faults" class="primary">reset all faults</button></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="event log">
+      <h2>Events</h2>
+      <ul id="events" class="events"></ul>
+    </section>
+  </div>
+
+  <section class="panel" aria-label="wells">
+    <h2>Wells <span class="unit" id="wells-meta"></span></h2>
+    <div id="wells" class="wells"></div>
+  </section>
+</main>
+
+<div id="tooltip" class="tooltip" hidden></div>
+<script type="module" src="app.js"></script>
+</body>
+</html>

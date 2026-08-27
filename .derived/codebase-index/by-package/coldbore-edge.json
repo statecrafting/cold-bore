@@ -1,0 +1,10 @@
+{
+  "package": {
+    "kind": "rust-bin",
+    "name": "coldbore-edge",
+    "path": "crates/coldbore-edge",
+    "specRef": "004-edge-producer"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "92737cdc9a2721f8e3c25a7f2e524dd8f9b682e6e935704569b9a12761659cd6"
+}

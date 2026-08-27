@@ -1,0 +1,10 @@
+{
+  "package": {
+    "kind": "rust-bin",
+    "name": "coldbore-ingest",
+    "path": "crates/coldbore-ingest",
+    "specRef": "005-ingest-consumer"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "4d98f05e59346a11c2b9211c9b13379f2d951f5ebcc48c4675ca51ef697e1c32"
+}

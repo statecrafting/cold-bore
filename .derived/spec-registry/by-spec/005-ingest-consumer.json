@@ -1,0 +1,30 @@
+{
+  "record": {
+    "created": "2026-08-27",
+    "dependsOn": [
+      "001-architecture",
+      "002-telemetry-model",
+      "003-infra"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "crates/coldbore-ingest/"
+      }
+    ],
+    "id": "005-ingest-consumer",
+    "sectionHeadings": [
+      "005: Ingest consumer",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "4. Out of scope"
+    ],
+    "specPath": "specs/005-ingest-consumer/spec.md",
+    "status": "approved",
+    "summary": "The consumer side: manual-ack consumption from the durable classic queue under bounded prefetch, batched idempotent inserts into the frames hypertable, ack strictly after commit, poison dead-lettering, per-well gap tracking with heal events, and per-second end-to-end latency histograms. The data path contains no test-only branches.\n",
+    "title": "Ingest consumer: ack-after-commit, idempotent batched sink, gap accounting"
+  },
+  "shardHash": "9d29e0aa4d17429182883e6ab99eb4be547b45d99727d2269defe9344f70cc65",
+  "specVersion": "1.1.0"
+}

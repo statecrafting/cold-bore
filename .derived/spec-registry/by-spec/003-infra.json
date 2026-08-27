@@ -1,0 +1,32 @@
+{
+  "record": {
+    "created": "2026-08-27",
+    "dependsOn": [
+      "001-architecture"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "infra/"
+      },
+      {
+        "kind": "file",
+        "path": "scripts/"
+      }
+    ],
+    "id": "003-infra",
+    "sectionHeadings": [
+      "003: Infrastructure",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "4. Out of scope"
+    ],
+    "specPath": "specs/003-infra/spec.md",
+    "status": "approved",
+    "summary": "The docker-compose lab: RabbitMQ 4 (management + stream plugins, localhost port bindings, stream advertised host) and TimescaleDB (PostgreSQL 17) with the schema migrations that define the frames hypertable, its identity index, the frames_1s continuous aggregate, compression policy, and the events / service_metrics tables. Plus the run scripts that supervise the services during drills.\n",
+    "title": "Infrastructure: broker, database, provisioning"
+  },
+  "shardHash": "3b1d8ae1d296e7a875ff9efb9e96e4f830140a81bbeaf7b45a8afa1ad5d08790",
+  "specVersion": "1.1.0"
+}

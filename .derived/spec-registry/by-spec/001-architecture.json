@@ -23,6 +23,6 @@
     "summary": "The load-bearing shape of cold-bore: a fault-injectable scale model of a completions-style data platform (edge simulator, RabbitMQ data/control/ telemetry planes, Rust ingest, TimescaleDB, Python API/WebSocket egress, dashboard game console). Owns the architecture document and binds every component spec to the hop-by-hop delivery contract defined there.\n",
     "title": "System architecture and delivery contract"
   },
-  "shardHash": "230e48f228dede54d80e62e521e3d58a20974f68c5b094509361934346480291",
+  "shardHash": "9cb2e9b92b5f0ec4e2d7a2de03e9595fbbce2a34d0a9dd84e7f02ea02fbb96bc",
   "specVersion": "1.1.0"
 }

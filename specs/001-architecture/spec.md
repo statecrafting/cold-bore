@@ -31,8 +31,11 @@ normative for:
 - the three-plane broker topology (data, control, telemetry) and the object
   names in its §3;
 - the frame contract (§4), including that `seq` is assigned only by the
-  edge, monotonic per `(pad, well)`, and serves as the pipeline-wide
-  idempotency and gap key;
+  edge, monotonic per `(pad, well)` within a producer generation, and that
+  pipeline-wide identity (idempotency and gap key) is
+  `(pad, well, epoch, seq)`, where `epoch` is the producer generation: a
+  restarted producer can never collide with or masquerade as its previous
+  generation;
 - the hop-by-hop delivery contract (§5): at-least-once end to end,
   effectively exactly-once at the sink; ack/offset-store strictly after
   database commit; order-independent idempotent sink; dead-lettered poison;

@@ -99,6 +99,7 @@ decision log covers the trade-off):
   "v": 1,
   "pad": 2,
   "well": 5,
+  "epoch": 1724790000000,
   "seq": 184467,
   "t_ms": 1724790000123,
   "pressure_psi": 8543.2,
@@ -109,8 +110,14 @@ decision log covers the trade-off):
 ```
 
 - `seq` is assigned **only** by the edge, monotonically increasing per
-  `(pad, well)` from process start, never reused, never reassigned. It is the
-  idempotency and gap-detection key for the entire pipeline.
+  `(pad, well)` within a producer generation, never reused, never
+  reassigned. Together with `epoch` it is the idempotency and gap-detection
+  key for the entire pipeline.
+- `epoch` is the producer generation: the edge process's start wall-clock in
+  ms. A restarted edge starts a new epoch, so seq restarting at 1 can never
+  collide with the previous run's rows, gap accounting resets per
+  generation, and stragglers from a dead generation are identifiable. (The
+  same job Kafka producer epochs and stream publisher ids do.)
 - `t_ms` is event time (producer wall clock at sample generation). End-to-end
   latency is measured against it; edge and ingest run on the same host or
   LAN, so clock skew is negligible for lab purposes (noted in the SLO
@@ -159,7 +166,8 @@ the sink by an idempotent insert**. Every hop states its guarantee:
    multi-row `INSERT ... SELECT unnest(...) ON CONFLICT DO NOTHING` when the
    batch reaches `CB_BATCH_MAX_FRAMES` (default 500) or
    `CB_BATCH_MAX_MS` (default 200) elapses, whichever first. The conflict
-   target is the sink's uniqueness key `(pad_id, well_id, seq, time)`;
+   target is the sink's uniqueness key `(pad_id, well_id, epoch, seq,
+   time)`;
    conflicts are counted as `dup_dropped` and are the observable measure of
    duplicate absorption. Ack (or offset store) follows commit; a crash
    between commit and ack yields redelivery, absorbed as above.
@@ -190,13 +198,14 @@ CREATE TABLE frames (
   time         TIMESTAMPTZ NOT NULL,   -- event time (frame t_ms)
   pad_id       SMALLINT    NOT NULL,
   well_id      SMALLINT    NOT NULL,
+  epoch        BIGINT      NOT NULL,    -- producer generation
   seq          BIGINT      NOT NULL,
   pressure_psi REAL        NOT NULL,
   rate_bpm     REAL        NOT NULL,
   proppant_ppa REAL        NOT NULL,
   temp_f       REAL        NOT NULL,
   inserted_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (pad_id, well_id, seq, time)
+  UNIQUE (pad_id, well_id, epoch, seq, time)
 );
 SELECT create_hypertable('frames', 'time', chunk_time_interval => INTERVAL '15 minutes');
 ```
@@ -205,6 +214,9 @@ SELECT create_hypertable('frames', 'time', chunk_time_interval => INTERVAL '15 m
   hypertable's unique constraints must include the partitioning column (and a
   duplicate frame carries the identical `time`, so the constraint still
   fires).
+- At startup the ingest seeds its gap accounting from the durable store
+  (newest epoch + max seq per well), so a restarted consumer never reports
+  already-landed history as open gaps.
 - A continuous aggregate `frames_1s` (1-second per-well OHLC-style rollup)
   backs dashboard history queries so they never scan raw frames.
 - Compression policy on chunks older than 1 hour: the compression ratio is a
