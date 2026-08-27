@@ -27,6 +27,6 @@
     "summary": "The docker-compose lab: RabbitMQ 4 (management + stream plugins, localhost port bindings, stream advertised host) and TimescaleDB (PostgreSQL 17) with the schema migrations that define the frames hypertable, its identity index, the frames_1s continuous aggregate, compression policy, and the events / service_metrics tables. Plus the run scripts that supervise the services during drills.\n",
     "title": "Infrastructure: broker, database, provisioning"
   },
-  "shardHash": "09a9afa737f15084b4f1fbaba609c0a9d2ed69628067e3f2d339c43448096f63",
+  "shardHash": "5cab5859c08cfc44ed16829e878b3c9be70c74983ea6719af50a4d43f2293b82",
   "specVersion": "1.1.0"
 }

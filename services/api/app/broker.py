@@ -86,6 +86,25 @@ class Broker:
             except Exception:
                 log.exception("telemetry handler failed")
 
+    async def publish_poison(self) -> None:
+        """Debug injector: publish one malformed frame to the frames
+        exchange (the DLQ drill in classic mode; skip-and-count in stream
+        mode). Never touches the edge: this is broker-side garbage."""
+        if self._connection is None:
+            raise RuntimeError("broker not started")
+        channel = await self._connection.channel()
+        try:
+            exchange = await channel.get_exchange("cb.frames.x", ensure=False)
+            await exchange.publish(
+                aio_pika.Message(
+                    body=b'{"v": 99, "garbage": true}',
+                    content_type="application/json",
+                ),
+                routing_key="frames.pad0.well0",
+            )
+        finally:
+            await channel.close()
+
     async def publish_control(self, command: dict) -> None:
         if self._control_exchange is None:
             raise RuntimeError("broker not started")

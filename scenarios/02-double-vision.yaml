@@ -1,0 +1,19 @@
+# A flaky uplink retransmits everything it half-heard: 20% duplicates.
+# The idempotent sink must absorb them without inflating the data.
+id: 02-double-vision
+title: Double Vision
+tagline: A flaky radio duplicates a fifth of the traffic. The database must not blink.
+duration_s: 75
+objectives:
+  completeness_pct: 100
+  max_p99_ms: 1000
+  recovery_s: 20
+timeline:
+  - at: 10
+    cmd: { cmd: dup, rate: 0.2 }
+  - at: 60
+    cmd: { cmd: dup, rate: 0.0 }
+scoring:
+  completeness: 50
+  latency: 30
+  recovery: 20

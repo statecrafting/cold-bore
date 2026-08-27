@@ -48,6 +48,8 @@ rabbitmq.conf), `infra/timescale/init/*.sql`, `scripts/run-*.sh`.
   dashboard history reads; raw `frames` is never scanned for charts.
 - `events` and `service_metrics` capture the telemetry plane;
   `service_metrics` is itself a hypertable.
+- `scenario_runs` (spec 009): scenario executions and their score
+  breakdowns (`002_scenarios.sql`; apply manually on an existing volume).
 - `stream_offsets` (spec 008): the stream consumer's committed offset,
   updated in the same transaction as the batch it covers; the broker-side
   offset store is observability, this row is the truth.

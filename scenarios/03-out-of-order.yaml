@@ -1,0 +1,23 @@
+# Multipath routing scrambles arrival order while volume quintuples.
+# Ordering lives in the data model, not the transport: prove it.
+id: 03-out-of-order
+title: Out of Order
+tagline: Frames arrive scrambled at 5x volume. Order is restored at rest.
+duration_s: 90
+objectives:
+  completeness_pct: 100
+  max_p99_ms: 1500
+  recovery_s: 25
+timeline:
+  - at: 8
+    cmd: { cmd: rate, multiplier: 5 }
+  - at: 15
+    cmd: { cmd: reorder, window: 256 }
+  - at: 65
+    cmd: { cmd: reorder, window: 0 }
+  - at: 70
+    cmd: { cmd: rate, multiplier: 1 }
+scoring:
+  completeness: 50
+  latency: 30
+  recovery: 20

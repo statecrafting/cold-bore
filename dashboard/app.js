@@ -200,11 +200,81 @@ for (const row of document.querySelectorAll(".btn-row[data-cmd]")) {
   });
 }
 document.getElementById("kill-ingest").addEventListener("click", () => sendControl({ cmd: "kill", service: "ingest" }));
+document.getElementById("poison").addEventListener("click", async () => {
+  try {
+    const res = await fetch("/api/debug/poison", { method: "POST" });
+    if (!res.ok) logEvent("control_rejected", "console", Date.now(), { status: res.status });
+  } catch (err) {
+    logEvent("control_failed", "console", Date.now(), { error: String(err) });
+  }
+});
 document.getElementById("kill-edge").addEventListener("click", () => sendControl({ cmd: "kill", service: "edge" }));
 document.getElementById("reset-faults").addEventListener("click", () => {
   sendControl({ cmd: "reset" });
   document.querySelectorAll(".btn-row[data-cmd] button.active").forEach((b) => b.classList.remove("active"));
 });
+
+// ── scenarios ─────────────────────────────────────────────────────────
+const scenarioList = document.getElementById("scenario-list");
+const scenarioActive = document.getElementById("scenario-active");
+const scenarioScore = document.getElementById("scenario-score");
+let activeRun = null;
+
+async function loadScenarios() {
+  try {
+    const res = await fetch("/api/scenarios");
+    if (!res.ok) return;
+    const body = await res.json();
+    scenarioList.replaceChildren();
+    for (const s of body.scenarios) {
+      const card = document.createElement("div");
+      card.className = "scenario";
+      card.innerHTML = `<span class="name">${s.title}</span><button data-id="${s.id}">run</button>
+        <span class="tag">${s.tagline} · ${s.duration_s}s · ${s.steps} steps</span>`;
+      card.querySelector("button").addEventListener("click", async (e) => {
+        e.target.disabled = true;
+        try {
+          const r = await fetch(`/api/scenarios/${s.id}/start`, { method: "POST" });
+          if (!r.ok) logEvent("scenario_rejected", "console", Date.now(), { id: s.id, status: r.status });
+          else {
+            const b = await r.json();
+            activeRun = b.active;
+            scenarioScore.hidden = true;
+          }
+        } finally {
+          e.target.disabled = false;
+        }
+      });
+      scenarioList.append(card);
+    }
+    if (body.active) activeRun = body.active;
+  } catch { /* api not up yet; retried by caller */ }
+}
+loadScenarios();
+setInterval(() => {
+  if (!activeRun) { scenarioActive.hidden = true; return; }
+  const elapsed = Date.now() / 1000 - activeRun.started_at;
+  if (elapsed > activeRun.duration_s + 5) { activeRun = null; return; }
+  scenarioActive.hidden = false;
+  scenarioActive.innerHTML = `<strong>${activeRun.title}</strong> running ·
+    <span class="t">${Math.max(0, activeRun.duration_s - elapsed).toFixed(0)}s left</span> ·
+    ${activeRun.steps_fired ?? 0} steps fired`;
+}, 1000);
+
+function showScore(data) {
+  activeRun = null;
+  const g = data.grade ?? "?";
+  const cls = ["S", "A"].includes(g) ? "good" : ["B", "C"].includes(g) ? "mid" : "bad";
+  const comps = Object.entries(data.components ?? {})
+    .map(([k, v]) => `${k} ${v}/${(data.weights ?? {})[k] ?? "?"}`)
+    .join(" · ");
+  const d = data.detail ?? {};
+  scenarioScore.hidden = false;
+  scenarioScore.innerHTML = `<span class="grade ${cls}">${g}</span>
+    <span class="headline">${data.scenario}: ${data.total} / 100</span>
+    <span class="line">${comps}</span>
+    <span class="line">completeness ${d.completeness_pct ?? "?"}% · p99 in SLO ${d.p99_within_slo_pct ?? "?"}% · recovery ${d.recovery_s ?? "n/a"}s</span>`;
+}
 
 // ── websocket ─────────────────────────────────────────────────────────
 const connBadge = document.getElementById("conn-badge");
@@ -224,7 +294,12 @@ function connect() {
     if (msg.type === "metrics") onMetrics(msg.service, msg.data);
     else if (msg.type === "broker") { latest.broker = msg.data; }
     else if (msg.type === "wells") renderWells(msg.data);
-    else if (msg.type === "event") logEvent(msg.kind, msg.service, msg.t_ms, msg.data);
+    else if (msg.type === "event") {
+      logEvent(msg.kind, msg.service, msg.t_ms, msg.data);
+      if (msg.kind === "scenario_scored") showScore(msg.data);
+      else if (msg.kind === "scenario_started") scenarioScore.hidden = true;
+      else if (msg.kind === "scenario_step" && activeRun) activeRun.steps_fired = (activeRun.steps_fired ?? 0) + 1;
+    }
     else if (msg.type === "hello") {
       for (const [svc, data] of Object.entries(msg.services ?? {})) onMetrics(svc, data);
       if (msg.broker && Object.keys(msg.broker).length) latest.broker = msg.broker;
