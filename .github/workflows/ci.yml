@@ -1,0 +1,90 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  governance:
+    name: spec-spine gates
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: spec-spine-install
+          cache-targets: false
+      - name: Install spec-spine
+        run: cargo install spec-spine-cli --locked
+      - name: Registry freshness (recompile + diff; 0.10.x has no compile --check)
+        run: |
+          spec-spine compile
+          git diff --exit-code .derived/spec-registry
+      - name: Index freshness
+        run: |
+          spec-spine index
+          git diff --exit-code .derived/codebase-index
+          spec-spine index check
+      - name: Corpus lint
+        run: spec-spine lint --fail-on-warn
+      - name: Coupling gate (PRs only)
+        if: github.event_name == 'pull_request'
+        env:
+          SPEC_SPINE_PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          spec-spine couple --base "origin/${{ github.base_ref }}" --head HEAD
+
+  rust:
+    name: rust build + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect workspace
+        id: ws
+        run: test -f Cargo.toml && echo "present=true" >> "$GITHUB_OUTPUT" || echo "present=false" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.ws.outputs.present == 'true'
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        if: steps.ws.outputs.present == 'true'
+      - name: Format
+        if: steps.ws.outputs.present == 'true'
+        run: cargo fmt --all --check
+      - name: Clippy
+        if: steps.ws.outputs.present == 'true'
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        if: steps.ws.outputs.present == 'true'
+        run: cargo test --workspace --locked
+
+  python:
+    name: python lint + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect service
+        id: svc
+        run: test -f services/api/pyproject.toml && echo "present=true" >> "$GITHUB_OUTPUT" || echo "present=false" >> "$GITHUB_OUTPUT"
+      - uses: astral-sh/setup-uv@v5
+        if: steps.svc.outputs.present == 'true'
+      - name: Sync
+        if: steps.svc.outputs.present == 'true'
+        run: uv sync --locked
+        working-directory: services/api
+      - name: Ruff
+        if: steps.svc.outputs.present == 'true'
+        run: uv run ruff check .
+        working-directory: services/api
+      - name: Pytest
+        if: steps.svc.outputs.present == 'true'
+        run: uv run pytest
+        working-directory: services/api

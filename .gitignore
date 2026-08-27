@@ -1,0 +1,33 @@
+# Rust build output
+/target
+**/*.rs.bk
+
+# Python (services/api is uv-managed; uv.lock IS committed)
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# NOTE: .derived/ (compiler/indexer output) is intentionally NOT ignored; it
+# is committed so the coupling gate and staleness checks can compare the
+# committed registry/index against current inputs. Determinism makes this
+# sane. The one exception: build-meta.json carries a wall-clock `builtAt`
+# (the sole non-deterministic artifact), so it would churn on every compile.
+.derived/**/build-meta.json
+.derived/attestation/
+
+# OS / editor cruft
+.DS_Store
+*.swp
+.idea/
+
+# Local secrets: never commit
+.env
+.env.*
+
+# Agent tooling (.claude/) is committed: agents/, rules/, skills/ are the
+# curated cross-agent setup CLAUDE.md and AGENTS.md reference. Per-agent
+# learned memory is local, session-generated state.
+.claude/agent-memory/
+.claude/settings.local.json

@@ -1,0 +1,32 @@
+# spec-spine.toml governs this repository. All keys are optional; an
+# absent file behaves as the defaults for a single-Cargo-workspace repo.
+
+[manifest]
+# Crates carry `[package.metadata.spec-spine].spec = "NNN-slug"`.
+metadata_namespace = "spec-spine"
+
+[domains]
+allowed = []   # `domain` is free-text / disabled
+
+[kind]
+allowed = []   # `kind` is free-text / disabled
+
+[layout]
+specs_dir     = "specs"
+derived_dir   = ".derived"
+standards_dir = "standards/spec"
+
+[index]
+resolver_exclusions = ["target", "node_modules", ".derived", ".venv", "dist", "build"]
+
+[branding]
+compiler_id = "spec-spine"
+indexer_id  = "spec-spine"
+
+[coupling]
+waiver_keyword = "Spec-Drift-Waiver:"
+# ADDITIVE to the built-in bypass floor (which already covers docs/, .github/,
+# the root README.md, lockfiles, .derived/, etc.):
+#   **/README.md : per-crate/service READMEs are prose, not code drift
+#   **/uv.lock   : Python lockfile (the floor covers Cargo/npm locks only)
+bypass_prefixes = ["**/README.md", "**/uv.lock"]
