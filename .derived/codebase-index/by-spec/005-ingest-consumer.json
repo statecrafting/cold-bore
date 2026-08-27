@@ -1,0 +1,38 @@
+{
+  "mapping": {
+    "dependsOn": [
+      "001-architecture",
+      "002-telemetry-model",
+      "003-infra"
+    ],
+    "implementingPaths": [
+      {
+        "path": "crates/coldbore-ingest",
+        "source": "manifest-metadata"
+      },
+      {
+        "path": "crates/coldbore-ingest/",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": "crates/coldbore-ingest/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "crates/coldbore-ingest/"
+        }
+      }
+    ],
+    "specId": "005-ingest-consumer",
+    "specStatus": "approved"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "b849a0e5e5f688d9f4632b0f9afa003af7f2606e9f2e6a0eb7b9013dd2af3533"
+}

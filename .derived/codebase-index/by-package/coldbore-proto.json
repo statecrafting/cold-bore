@@ -1,0 +1,10 @@
+{
+  "package": {
+    "kind": "rust-lib",
+    "name": "coldbore-proto",
+    "path": "crates/coldbore-proto",
+    "specRef": "002-telemetry-model"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "7e95e86fd425133f299b55c82cf206cc39a96dd1864581163879a76e7e6ec3cc"
+}

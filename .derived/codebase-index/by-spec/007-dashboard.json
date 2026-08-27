@@ -1,11 +1,12 @@
 {
   "mapping": {
     "dependsOn": [
-      "000-bootstrap"
+      "001-architecture",
+      "006-api-service"
     ],
     "implementingPaths": [
       {
-        "path": "docs/design/architecture.md",
+        "path": "dashboard/",
         "source": "spec-edge"
       }
     ],
@@ -13,20 +14,20 @@
       {
         "locations": [
           {
-            "file": "docs/design/architecture.md"
+            "file": "dashboard/"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "docs/design/architecture.md"
+          "path": "dashboard/"
         }
       }
     ],
-    "specId": "001-architecture",
+    "specId": "007-dashboard",
     "specStatus": "approved"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "ba0d49e3c248282ce530ed031ba08ee726ca0dc28f01eaad7206b35c8c666aa9"
+  "shardHash": "4959b5b8bc9d4430ea80b06d6d6d666cc4d4ed50282b1e528d27d2883a0210a2"
 }

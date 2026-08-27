@@ -1,11 +1,13 @@
 {
   "mapping": {
     "dependsOn": [
-      "000-bootstrap"
+      "001-architecture",
+      "002-telemetry-model",
+      "003-infra"
     ],
     "implementingPaths": [
       {
-        "path": "docs/design/architecture.md",
+        "path": "services/api/",
         "source": "spec-edge"
       }
     ],
@@ -13,20 +15,20 @@
       {
         "locations": [
           {
-            "file": "docs/design/architecture.md"
+            "file": "services/api/"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "docs/design/architecture.md"
+          "path": "services/api/"
         }
       }
     ],
-    "specId": "001-architecture",
+    "specId": "006-api-service",
     "specStatus": "approved"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "ba0d49e3c248282ce530ed031ba08ee726ca0dc28f01eaad7206b35c8c666aa9"
+  "shardHash": "ea4b72431ba6673d110c4eaf5e01dfa1ffd681478b47b1adf239c707d3951beb"
 }

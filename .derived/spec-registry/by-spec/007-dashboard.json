@@ -1,0 +1,29 @@
+{
+  "record": {
+    "created": "2026-08-27",
+    "dependsOn": [
+      "001-architecture",
+      "006-api-service"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "dashboard/"
+      }
+    ],
+    "id": "007-dashboard",
+    "sectionHeadings": [
+      "007: Dashboard",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "4. Out of scope"
+    ],
+    "specPath": "specs/007-dashboard/spec.md",
+    "status": "approved",
+    "summary": "The no-build-step browser console: live charts (throughput, backlog, latency, absorption) fed over WebSocket with rates derived from cumulative counters, stat tiles, the fault console (link/dup/reorder/rate/kill/reset), the event log, and the per-well live grid. Dark-only ops aesthetic; the validated reference palette's dark steps.\n",
+    "title": "Dashboard: the night-shift console"
+  },
+  "shardHash": "d64cb8c263fb29825ff2357fbad30bf86cd66d17b92b3ef277fd581247923f54",
+  "specVersion": "1.1.0"
+}

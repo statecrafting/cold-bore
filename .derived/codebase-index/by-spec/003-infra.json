@@ -1,0 +1,49 @@
+{
+  "mapping": {
+    "dependsOn": [
+      "001-architecture"
+    ],
+    "implementingPaths": [
+      {
+        "path": "infra/",
+        "source": "spec-edge"
+      },
+      {
+        "path": "scripts/",
+        "source": "spec-edge"
+      }
+    ],
+    "resolvedUnits": [
+      {
+        "locations": [
+          {
+            "file": "infra/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "infra/"
+        }
+      },
+      {
+        "locations": [
+          {
+            "file": "scripts/"
+          }
+        ],
+        "ownership": true,
+        "sourceField": "establishes",
+        "unit": {
+          "kind": "file",
+          "path": "scripts/"
+        }
+      }
+    ],
+    "specId": "003-infra",
+    "specStatus": "approved"
+  },
+  "schemaVersion": "1.1.0",
+  "shardHash": "9084d7514ef82bc84a3e2370b74148731260c5420b0bad74e2768f57e8b80a52"
+}

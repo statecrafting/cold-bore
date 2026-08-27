@@ -1,0 +1,45 @@
+name: coldbore
+
+services:
+  rabbitmq:
+    image: rabbitmq:4.1-management
+    container_name: coldbore-rabbitmq
+    hostname: coldbore-rabbitmq
+    ports:
+      - "127.0.0.1:5672:5672"    # AMQP 0.9.1
+      - "127.0.0.1:15672:15672"  # management UI / HTTP API
+      - "127.0.0.1:5552:5552"    # native stream protocol
+    environment:
+      RABBITMQ_DEFAULT_USER: coldbore
+      RABBITMQ_DEFAULT_PASS: coldbore
+    volumes:
+      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/conf.d/20-coldbore.conf:ro
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg17
+    container_name: coldbore-timescaledb
+    ports:
+      - "127.0.0.1:5433:5432"    # 5433 on the host to avoid clashing with a local postgres
+    environment:
+      POSTGRES_USER: coldbore
+      POSTGRES_PASSWORD: coldbore
+      POSTGRES_DB: coldbore
+    volumes:
+      - ./timescale/init:/docker-entrypoint-initdb.d:ro
+      - timescale-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U coldbore -d coldbore"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  rabbitmq-data:
+  timescale-data:

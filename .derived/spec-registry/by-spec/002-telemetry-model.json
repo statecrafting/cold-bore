@@ -1,0 +1,28 @@
+{
+  "record": {
+    "created": "2026-08-27",
+    "dependsOn": [
+      "001-architecture"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "crates/coldbore-proto/"
+      }
+    ],
+    "id": "002-telemetry-model",
+    "sectionHeadings": [
+      "002: Telemetry model and cross-language contracts",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "4. Out of scope"
+    ],
+    "specPath": "specs/002-telemetry-model/spec.md",
+    "status": "approved",
+    "summary": "The shared vocabulary of the pipeline: the sensor frame (with seq as the pipeline-wide idempotency and gap key), the control-command grammar, the metrics-snapshot and event shapes, broker object names, and the CB_* env configuration. Owned by the coldbore-proto crate; mirrored in Python by services/api.\n",
+    "title": "Telemetry model and cross-language contracts"
+  },
+  "shardHash": "8fcc93534c5f714c09deb4401c0219557734d214213c32cf715052c2302ef519",
+  "specVersion": "1.1.0"
+}

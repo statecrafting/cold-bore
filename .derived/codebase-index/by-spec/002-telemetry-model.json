@@ -1,11 +1,15 @@
 {
   "mapping": {
     "dependsOn": [
-      "000-bootstrap"
+      "001-architecture"
     ],
     "implementingPaths": [
       {
-        "path": "docs/design/architecture.md",
+        "path": "crates/coldbore-proto",
+        "source": "manifest-metadata"
+      },
+      {
+        "path": "crates/coldbore-proto/",
         "source": "spec-edge"
       }
     ],
@@ -13,20 +17,20 @@
       {
         "locations": [
           {
-            "file": "docs/design/architecture.md"
+            "file": "crates/coldbore-proto/"
           }
         ],
         "ownership": true,
         "sourceField": "establishes",
         "unit": {
           "kind": "file",
-          "path": "docs/design/architecture.md"
+          "path": "crates/coldbore-proto/"
         }
       }
     ],
-    "specId": "001-architecture",
+    "specId": "002-telemetry-model",
     "specStatus": "approved"
   },
   "schemaVersion": "1.1.0",
-  "shardHash": "ba0d49e3c248282ce530ed031ba08ee726ca0dc28f01eaad7206b35c8c666aa9"
+  "shardHash": "216c810d7bcc38672e0337e14ef93baa79d2d6e757e2614c67be9adce5d55fb9"
 }

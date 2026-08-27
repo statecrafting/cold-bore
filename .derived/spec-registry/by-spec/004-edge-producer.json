@@ -1,0 +1,29 @@
+{
+  "record": {
+    "created": "2026-08-27",
+    "dependsOn": [
+      "001-architecture",
+      "002-telemetry-model"
+    ],
+    "establishes": [
+      {
+        "kind": "file",
+        "path": "crates/coldbore-edge/"
+      }
+    ],
+    "id": "004-edge-producer",
+    "sectionHeadings": [
+      "004: Edge producer",
+      "1. Purpose",
+      "2. Territory",
+      "3. Behavior",
+      "4. Out of scope"
+    ],
+    "specPath": "specs/004-edge-producer/spec.md",
+    "status": "approved",
+    "summary": "The field side: N pads x M wells of generated telemetry published with publisher confirms; per-pad bounded store-and-forward buffers for severed uplinks; the confirm/retransmit window; and every injectable fault (link, dup, reorder, rate) in the publish path. At-least-once from the edge: a frame leaves edge custody only on broker confirm.\n",
+    "title": "Edge producer: simulation, confirmed publishing, store-and-forward, fault hooks"
+  },
+  "shardHash": "ce6f1fde892b5267e4552b9f4e91da46689641f1b1a80e0b48c6f0a8a66d9e58",
+  "specVersion": "1.1.0"
+}
