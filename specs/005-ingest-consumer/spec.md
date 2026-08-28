@@ -67,6 +67,16 @@ declaration), `sink` (batched UNNEST insert, ON CONFLICT DO NOTHING),
 - On broker or database failure the session returns to the supervisor and
   reconnects with capped backoff; unacked deliveries redeliver and are
   absorbed.
+- **A dead connection must never be mistaken for an empty queue.** A
+  half-dead socket (the post-host-sleep signature) raises no library
+  error, and an idle consumer has no traffic to notice it by. The session
+  therefore enforces liveness itself: a 5 s passive-declare probe (a real
+  broker round trip, time-bounded), a bounded metrics publish, and a
+  30 s bound on the batch insert (a batch is milliseconds of work; the
+  bound firing means a dead database socket). Any of them failing ends
+  the session so the supervisor reconnects. Applies to both classic and
+  stream loops; in stream mode the probe rides the AMQP side, and
+  breaking the session rebuilds the stream consumer with it.
 
 - **Stream mode** (spec 008 amendment): `CB_MODE=stream` consumes the
   stream via the native protocol; the committed offset is stored in the

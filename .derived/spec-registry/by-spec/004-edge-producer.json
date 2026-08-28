@@ -24,6 +24,6 @@
     "summary": "The field side: N pads x M wells of generated telemetry published with publisher confirms; per-pad bounded store-and-forward buffers for severed uplinks; the confirm/retransmit window; and every injectable fault (link, dup, reorder, rate) in the publish path. At-least-once from the edge: a frame leaves edge custody only on broker confirm.\n",
     "title": "Edge producer: simulation, confirmed publishing, store-and-forward, fault hooks"
   },
-  "shardHash": "b5854524012f34671793d22a812fce4e21e6928205178f57176456379a3edcf5",
+  "shardHash": "ed8cd965f183ab3b3da58b60e15362d3c6cb898f1aee288a2f7b343a84d4939e",
   "specVersion": "1.1.0"
 }

@@ -42,6 +42,7 @@ engine = Engine(
     pool_getter=lambda: pool,
     publish_control=lambda cmd: broker.publish_control(cmd),
     broadcast=lambda msg: hub.broadcast(msg),
+    snapshots_getter=lambda: broker.latest,
 )
 
 
@@ -131,6 +132,8 @@ async def status() -> dict:
         "ws_clients": hub.client_count,
         "ws_dropped": hub.total_dropped,
         "db_connected": pool is not None,
+        # Empty list = the substrate is pulsing and scenarios may run.
+        "substrate_problems": engine.substrate_problems(),
     }
 
 

@@ -49,7 +49,14 @@ the truth about what was and was not delivered.
 - **Faults live here only** (plus the process supervisor): `dup` re-publishes
   a confirmed frame with probability `rate`; `reorder` shuffles windows of
   `window` frames; `rate` scales generation; `kill edge` exits 3. `reset`
-  restores all defaults. Every applied fault emits a `fault_applied` event.
+  restores all fault defaults. Every applied fault emits a `fault_applied`
+  event.
+- **The field resizes live.** `topology { pads, wells_per_pad }` takes
+  effect on the next generation tick: new wells start their own seq
+  timeline within the current epoch, existing wells are never reset, and a
+  well resized away and back resumes its own counter (seqs never reused).
+  Topology is a setting: `reset` keeps it; `CB_PADS`/`CB_WELLS_PER_PAD`
+  remain the boot defaults. Pads gained come up with a healthy link.
 - **Publishes are persistent** (delivery mode 2) with `message_id =
   pad-well-seq`; frames JSON per spec 002.
 - **The edge declares the full frames topology** (exchanges, DLX pair,
@@ -60,6 +67,20 @@ the truth about what was and was not delivered.
 - Reconnection uses capped exponential backoff (0.5 s to 10 s); frames
   arriving while disconnected buffer per pad; unconfirmed in-flight frames
   are reaped into the retry queue before the session ends.
+- **A dead connection must never be mistaken for a quiet one.** A
+  half-dead socket (the post-host-sleep signature) raises no library
+  error, so the uplink enforces liveness itself: publishes and the
+  teardown reap are time-bounded; confirms making no progress for 15 s
+  while frames are in flight end the session; and a 5 s passive-declare
+  probe (a real broker round trip) covers the idle case. Custody is held
+  outside the confirm futures so an unresolved confirm can never strand
+  its frame: at teardown, unresolved frames go to the retry queue
+  (possible duplicate publish, absorbed by the sink). The same stall
+  bound applies to the stream publisher (30 s without a confirm tears the
+  session down rather than cycling retransmits forever).
+- **Partial death is process death.** If the generator or uplink task ends
+  outside a ctrl-c, the process exits non-zero so the supervisor restarts
+  it; a process with a dead core task must not linger looking alive.
 
 - **Stream mode** (spec 008 amendment): `CB_MODE=stream` publishes
   straight to the stream in batches over the native protocol as a named

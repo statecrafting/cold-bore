@@ -32,6 +32,10 @@ pub enum ControlCommand {
     Reorder { window: u32 },
     /// Scale telemetry generation frequency (volume surge).
     Rate { multiplier: f64 },
+    /// Resize the simulated field at runtime: how many pads exist and how
+    /// many wells (signal sources) each carries. A setting, not a fault:
+    /// `reset` does not touch it.
+    Topology { pads: u16, wells_per_pad: u16 },
     /// Named service exits non-zero; its supervisor restarts it.
     Kill { service: ServiceId },
     /// Clear all injected faults back to defaults.
@@ -46,11 +50,20 @@ pub enum ControlError {
     ReorderWindow(u32),
     #[error("rate multiplier {0} outside ({MIN_RATE_MULTIPLIER}, {MAX_RATE_MULTIPLIER}]")]
     RateMultiplier(f64),
+    #[error(
+        "topology {pads} pads x {wells_per_pad} wells outside 1..={MAX_PADS} x 1..={MAX_WELLS_PER_PAD} with at most {MAX_TOTAL_WELLS} wells total"
+    )]
+    Topology { pads: u16, wells_per_pad: u16 },
 }
 
 pub const MAX_REORDER_WINDOW: u32 = 4096;
 pub const MIN_RATE_MULTIPLIER: f64 = 0.0;
 pub const MAX_RATE_MULTIPLIER: f64 = 100.0;
+/// Topology bounds: generous enough to stress the pipeline (64x64 would be
+/// 4096 wells), capped in total so one command cannot melt the lab host.
+pub const MAX_PADS: u16 = 64;
+pub const MAX_WELLS_PER_PAD: u16 = 64;
+pub const MAX_TOTAL_WELLS: u32 = 2048;
 
 impl ControlCommand {
     /// Bounds validation, applied by the api before publish and by services
@@ -74,6 +87,23 @@ impl ControlCommand {
                     || multiplier > MAX_RATE_MULTIPLIER
                 {
                     return Err(ControlError::RateMultiplier(multiplier));
+                }
+            }
+            ControlCommand::Topology {
+                pads,
+                wells_per_pad,
+            } => {
+                let total = u32::from(pads) * u32::from(wells_per_pad);
+                if pads == 0
+                    || wells_per_pad == 0
+                    || pads > MAX_PADS
+                    || wells_per_pad > MAX_WELLS_PER_PAD
+                    || total > MAX_TOTAL_WELLS
+                {
+                    return Err(ControlError::Topology {
+                        pads,
+                        wells_per_pad,
+                    });
                 }
             }
             ControlCommand::Link { .. } | ControlCommand::Kill { .. } | ControlCommand::Reset => {}
@@ -114,5 +144,42 @@ mod tests {
                 .is_ok()
         );
         assert!(ControlCommand::Reset.validate().is_ok());
+    }
+
+    #[test]
+    fn topology_wire_shape_and_bounds() {
+        let cmd = ControlCommand::Topology {
+            pads: 6,
+            wells_per_pad: 12,
+        };
+        let json = serde_json::to_string(&cmd).expect("serialize");
+        assert_eq!(json, r#"{"cmd":"topology","pads":6,"wells_per_pad":12}"#);
+        assert!(cmd.validate().is_ok());
+
+        for (pads, wells) in [
+            (0, 8),
+            (8, 0),
+            (MAX_PADS + 1, 1),
+            (1, MAX_WELLS_PER_PAD + 1),
+        ] {
+            assert!(
+                ControlCommand::Topology {
+                    pads,
+                    wells_per_pad: wells
+                }
+                .validate()
+                .is_err(),
+                "{pads}x{wells} should be rejected"
+            );
+        }
+        // Within per-axis bounds but over the total-well cap.
+        assert!(
+            ControlCommand::Topology {
+                pads: 64,
+                wells_per_pad: 64
+            }
+            .validate()
+            .is_err()
+        );
     }
 }

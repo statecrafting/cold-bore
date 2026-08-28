@@ -40,6 +40,14 @@ def test_kill_targets():
         adapter.validate_python({"cmd": "kill", "service": "api"})
 
 
+def test_topology_round_trip_and_bounds():
+    cmd = adapter.validate_python({"cmd": "topology", "pads": 6, "wells_per_pad": 12})
+    assert cmd.model_dump() == {"cmd": "topology", "pads": 6, "wells_per_pad": 12}
+    for pads, wells in [(0, 8), (8, 0), (65, 1), (1, 65), (64, 64)]:
+        with pytest.raises(ValidationError):
+            adapter.validate_python({"cmd": "topology", "pads": pads, "wells_per_pad": wells})
+
+
 def test_unknown_command_rejected():
     with pytest.raises(ValidationError):
         adapter.validate_python({"cmd": "rm_rf", "path": "/"})

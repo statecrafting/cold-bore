@@ -62,6 +62,12 @@ the command contract), `app/main.py` (lifespan, routes), `tests/`.
   runs, and emits `scenario_*` events; routes `/api/scenarios`,
   `/api/scenarios/{id}/start`, `/api/runs`, plus the broker-side poison
   injector `/api/debug/poison`.
+- **Substrate preflight.** The engine refuses to arm a scenario unless the
+  substrate is pulsing: database connected, and both edge and ingest have
+  reported a metrics snapshot within the last 5 s. The refusal (HTTP 409)
+  names every problem; `/api/status` exposes the same list as
+  `substrate_problems`. A scenario scored over a dead pipeline would be an
+  F that says nothing, and the engine must not produce it.
 
 ## 4. Out of scope
 

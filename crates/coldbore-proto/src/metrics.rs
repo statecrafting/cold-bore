@@ -32,6 +32,9 @@ pub struct EdgeMetrics {
     pub dup_injected: u64,
     /// Effective generation frequency per well after the rate multiplier.
     pub rate_hz: f64,
+    /// Current field size (runtime-adjustable via the `topology` command).
+    pub pads: u16,
+    pub wells_per_pad: u16,
     /// Pad id -> link up?
     pub links: BTreeMap<u16, bool>,
 }

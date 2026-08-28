@@ -8,10 +8,13 @@ and the owning spec in the same PR.
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 MAX_REORDER_WINDOW = 4096
 MAX_RATE_MULTIPLIER = 100.0
+MAX_PADS = 64
+MAX_WELLS_PER_PAD = 64
+MAX_TOTAL_WELLS = 2048
 
 
 class LinkCommand(BaseModel):
@@ -35,6 +38,24 @@ class RateCommand(BaseModel):
     multiplier: Annotated[float, Field(gt=0.0, le=MAX_RATE_MULTIPLIER, allow_inf_nan=False)]
 
 
+class TopologyCommand(BaseModel):
+    """Resize the simulated field at runtime. A setting, not a fault:
+    `reset` does not touch it."""
+
+    cmd: Literal["topology"]
+    pads: Annotated[int, Field(ge=1, le=MAX_PADS)]
+    wells_per_pad: Annotated[int, Field(ge=1, le=MAX_WELLS_PER_PAD)]
+
+    @model_validator(mode="after")
+    def total_wells_bounded(self) -> "TopologyCommand":
+        if self.pads * self.wells_per_pad > MAX_TOTAL_WELLS:
+            raise ValueError(
+                f"{self.pads} pads x {self.wells_per_pad} wells exceeds "
+                f"{MAX_TOTAL_WELLS} wells total"
+            )
+        return self
+
+
 class KillCommand(BaseModel):
     cmd: Literal["kill"]
     service: Literal["edge", "ingest"]
@@ -45,6 +66,12 @@ class ResetCommand(BaseModel):
 
 
 ControlCommand = Annotated[
-    LinkCommand | DupCommand | ReorderCommand | RateCommand | KillCommand | ResetCommand,
+    LinkCommand
+    | DupCommand
+    | ReorderCommand
+    | RateCommand
+    | TopologyCommand
+    | KillCommand
+    | ResetCommand,
     Field(discriminator="cmd"),
 ]

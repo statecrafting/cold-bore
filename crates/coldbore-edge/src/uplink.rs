@@ -328,7 +328,23 @@ pub(crate) async fn declare_topology(channel: &Channel) -> lapin::Result<()> {
     Ok(())
 }
 
-type InflightFuture = BoxFuture<'static, (Frame, bool, lapin::Result<Confirmation>)>;
+type ConfirmFuture = BoxFuture<'static, lapin::Result<Confirmation>>;
+
+/// A publish that does not complete within this bound means the socket is
+/// gone (a post-sleep half-dead connection buffers writes forever instead
+/// of erroring).
+const PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
+/// Frames in flight but zero confirms arriving for this long: the
+/// connection is presumed dead even though lapin has raised no error.
+const CONFIRM_STALL_TIMEOUT: Duration = Duration::from_secs(15);
+/// Cadence and bound of the liveness probe (a passive queue declare, i.e. a
+/// real broker round trip) that catches dead connections even while the
+/// publish path is idle.
+const PROBE_INTERVAL: Duration = Duration::from_secs(5);
+const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+/// How long a teardown waits for straggler confirms before declaring the
+/// rest unconfirmed and queueing them for retransmission.
+const REAP_TIMEOUT: Duration = Duration::from_secs(3);
 
 async fn publish_loop(
     cfg: &EdgeConfig,
@@ -338,9 +354,17 @@ async fn publish_loop(
     st: &mut UplinkState,
     channel: &Channel,
 ) -> anyhow::Result<()> {
-    let mut inflight: FuturesOrdered<InflightFuture> = FuturesOrdered::new();
+    let mut inflight: FuturesOrdered<ConfirmFuture> = FuturesOrdered::new();
+    // Custody stays here, not inside the confirm futures: FuturesOrdered
+    // yields in push order, so the front of this deque always pairs with
+    // the next yielded confirm, and a confirm that never resolves can never
+    // strand its frame.
+    let mut pending: VecDeque<(Frame, bool)> = VecDeque::new();
     let mut drain_tick = tokio::time::interval(Duration::from_millis(20));
     drain_tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    let mut probe_tick = tokio::time::interval(PROBE_INTERVAL);
+    probe_tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    let mut last_progress = Instant::now();
 
     loop {
         // Pump: put frames on the wire up to the confirm window.
@@ -348,15 +372,23 @@ async fn publish_loop(
             let Some((frame, is_dup)) = st.next_publishable(faults) else {
                 break;
             };
-            match start_publish(channel, &frame).await {
-                Ok(confirm) => {
+            match tokio::time::timeout(PUBLISH_TIMEOUT, start_publish(channel, &frame)).await {
+                Ok(Ok(confirm)) => {
                     counters.published.fetch_add(1, Relaxed);
-                    inflight.push_back(Box::pin(async move { (frame, is_dup, confirm.await) }));
+                    pending.push_back((frame, is_dup));
+                    inflight.push_back(Box::pin(confirm));
                 }
-                Err(e) => {
+                Ok(Err(e)) => {
                     st.retry.push_front(frame);
-                    reap_all(&mut inflight, st, counters).await;
+                    reap_all(&mut inflight, &mut pending, st, counters).await;
                     return Err(e.into());
+                }
+                Err(_) => {
+                    st.retry.push_front(frame);
+                    reap_all(&mut inflight, &mut pending, st, counters).await;
+                    return Err(anyhow::anyhow!(
+                        "publish timed out after {PUBLISH_TIMEOUT:?}; connection presumed dead"
+                    ));
                 }
             }
         }
@@ -366,7 +398,9 @@ async fn publish_loop(
             biased;
             reaped = inflight.next(), if !inflight.is_empty() => {
                 // FuturesOrdered guarded by is_empty: next() is Some.
-                let Some((frame, is_dup, result)) = reaped else { continue };
+                let Some(result) = reaped else { continue };
+                let (frame, is_dup) = pending.pop_front().expect("pending tracks inflight 1:1");
+                last_progress = Instant::now();
                 match result {
                     Ok(c) if c.is_ack() => {
                         counters.confirmed.fetch_add(1, Relaxed);
@@ -389,7 +423,7 @@ async fn publish_loop(
                         if !is_dup {
                             st.retry.push_back(frame);
                         }
-                        reap_all(&mut inflight, st, counters).await;
+                        reap_all(&mut inflight, &mut pending, st, counters).await;
                         return Err(e.into());
                     }
                 }
@@ -398,36 +432,95 @@ async fn publish_loop(
                 match received {
                     Some(frame) => st.buffer_frame(frame, counters),
                     None => {
-                        reap_all(&mut inflight, st, counters).await;
+                        reap_all(&mut inflight, &mut pending, st, counters).await;
                         return Ok(());
                     }
                 }
             }
             _ = drain_tick.tick() => {}
-        }
-    }
-}
-
-/// Drain every pending confirm; unconfirmed frames go back to the retry
-/// queue so no frame is lost across a reconnect.
-async fn reap_all(
-    inflight: &mut FuturesOrdered<InflightFuture>,
-    st: &mut UplinkState,
-    counters: &Counters,
-) {
-    while let Some((frame, is_dup, result)) = inflight.next().await {
-        match result {
-            Ok(c) if c.is_ack() => {
-                counters.confirmed.fetch_add(1, Relaxed);
-            }
-            _ => {
-                counters.retransmits.fetch_add(1, Relaxed);
-                if !is_dup {
-                    st.retry.push_back(frame);
+            _ = probe_tick.tick() => {
+                if inflight.is_empty() {
+                    last_progress = Instant::now();
+                } else if last_progress.elapsed() > CONFIRM_STALL_TIMEOUT {
+                    let stalled = pending.len();
+                    reap_all(&mut inflight, &mut pending, st, counters).await;
+                    return Err(anyhow::anyhow!(
+                        "no confirm progress for {CONFIRM_STALL_TIMEOUT:?} with {stalled} in flight; connection presumed dead"
+                    ));
+                }
+                if let Err(e) = probe_liveness(channel).await {
+                    reap_all(&mut inflight, &mut pending, st, counters).await;
+                    return Err(e);
                 }
             }
         }
     }
+}
+
+/// A passive declare of the frames queue: a cheap synchronous broker round
+/// trip. On a healthy connection it returns immediately; on a half-dead one
+/// (the post-sleep signature) it hangs or errors, bounding zombie time to
+/// `PROBE_INTERVAL + PROBE_TIMEOUT` instead of forever.
+pub(crate) async fn probe_liveness(channel: &Channel) -> anyhow::Result<()> {
+    use coldbore_proto::topology::FRAMES_QUEUE;
+    use lapin::options::QueueDeclareOptions;
+    let passive = QueueDeclareOptions {
+        passive: true,
+        ..QueueDeclareOptions::default()
+    };
+    match tokio::time::timeout(
+        PROBE_TIMEOUT,
+        channel.queue_declare(FRAMES_QUEUE.into(), passive, FieldTable::default()),
+    )
+    .await
+    {
+        Ok(Ok(_)) => Ok(()),
+        Ok(Err(e)) => Err(anyhow::anyhow!("liveness probe failed: {e}")),
+        Err(_) => Err(anyhow::anyhow!(
+            "liveness probe timed out after {PROBE_TIMEOUT:?}; connection presumed dead"
+        )),
+    }
+}
+
+/// Collect whatever confirms can still resolve within `REAP_TIMEOUT`; every
+/// frame whose confirm did not resolve goes back to the retry queue, so no
+/// frame is stranded by a dead connection. An unresolved confirm may mean
+/// the broker did get the frame: that is a duplicate publish, absorbed by
+/// the idempotent sink.
+async fn reap_all(
+    inflight: &mut FuturesOrdered<ConfirmFuture>,
+    pending: &mut VecDeque<(Frame, bool)>,
+    st: &mut UplinkState,
+    counters: &Counters,
+) {
+    let deadline = Instant::now() + REAP_TIMEOUT;
+    while !inflight.is_empty() {
+        match tokio::time::timeout_at(deadline, inflight.next()).await {
+            Ok(Some(result)) => {
+                let (frame, is_dup) = pending.pop_front().expect("pending tracks inflight 1:1");
+                match result {
+                    Ok(c) if c.is_ack() => {
+                        counters.confirmed.fetch_add(1, Relaxed);
+                    }
+                    _ => {
+                        counters.retransmits.fetch_add(1, Relaxed);
+                        if !is_dup {
+                            st.retry.push_back(frame);
+                        }
+                    }
+                }
+            }
+            Ok(None) => break,
+            Err(_) => break, // dead connection: stop waiting for confirms
+        }
+    }
+    while let Some((frame, is_dup)) = pending.pop_front() {
+        counters.retransmits.fetch_add(1, Relaxed);
+        if !is_dup {
+            st.retry.push_back(frame);
+        }
+    }
+    *inflight = FuturesOrdered::new();
 }
 
 async fn start_publish(channel: &Channel, frame: &Frame) -> lapin::Result<PublisherConfirm> {
@@ -489,7 +582,7 @@ mod tests {
 
     #[test]
     fn per_pad_order_preserved_without_faults() {
-        let faults = FaultBox::new(2);
+        let faults = FaultBox::new(2, 1);
         let counters = Counters::default();
         let mut st = UplinkState::new(&cfg(100));
         for seq in 1..=5 {
@@ -508,7 +601,7 @@ mod tests {
 
     #[test]
     fn link_down_holds_frames_and_cap_drops_oldest() {
-        let faults = FaultBox::new(2);
+        let faults = FaultBox::new(2, 1);
         let counters = Counters::default();
         let mut st = UplinkState::new(&cfg(3));
         faults.apply(&coldbore_proto::ControlCommand::Link {
@@ -533,7 +626,7 @@ mod tests {
 
     #[test]
     fn reorder_window_shuffles_but_loses_nothing() {
-        let faults = FaultBox::new(1);
+        let faults = FaultBox::new(1, 1);
         let counters = Counters::default();
         let mut st = UplinkState::new(&cfg(1000));
         faults.apply(&coldbore_proto::ControlCommand::Reorder { window: 8 });

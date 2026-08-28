@@ -30,6 +30,6 @@
     "summary": "The night-shift game: YAML scenarios are timelines of control commands with SLO objectives and scoring weights. The api's engine fires the timeline, clears all faults, lets the pipeline settle, and scores the shift from SQL over what actually landed (completeness from seq spans, latency from metric snapshots, recovery from the last fault to the first in-SLO snapshot). Every scenario is a named, repeatable experiment.\n",
     "title": "Scenarios and scoring: the game layer"
   },
-  "shardHash": "b011aae9251f9f4a93dced84acaa069e18f0988828fa7eec7155f2d44839faae",
+  "shardHash": "b40a6fe28c879e3208f69d2e352217019bb90f434428e3e338fa77fc74a69640",
   "specVersion": "1.1.0"
 }

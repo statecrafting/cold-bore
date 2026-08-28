@@ -25,6 +25,6 @@
     "summary": "The Python egress layer: FastAPI REST + WebSocket fan-out of the telemetry plane, the RabbitMQ management poller (broker-side lag truth), validated control-command publishing, persistence of events and metric snapshots, and the read queries over the continuous aggregate. Loses nothing upstream when it dies.\n",
     "title": "API service: egress, control entry point, telemetry persistence"
   },
-  "shardHash": "f8260ac470bab1acd6923fd43e5c49339afe31a9c968881a00655821d83122d8",
+  "shardHash": "6f091d1f05d3ac83f09f978ce84e830804948082676b268db8db15672b2a6af8",
   "specVersion": "1.1.0"
 }

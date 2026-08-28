@@ -14,16 +14,21 @@ pub struct FaultState {
     pub dup_rate: f64,
     pub reorder_window: u32,
     pub rate_multiplier: f64,
+    /// Field size: a runtime setting, not a fault. `reset` keeps it.
+    pub pads: u16,
+    pub wells_per_pad: u16,
     /// Pad id -> uplink up?
     pub links: BTreeMap<u16, bool>,
 }
 
 impl FaultState {
-    fn healthy(pads: u16) -> Self {
+    fn healthy(pads: u16, wells_per_pad: u16) -> Self {
         Self {
             dup_rate: 0.0,
             reorder_window: 0,
             rate_multiplier: 1.0,
+            pads,
+            wells_per_pad,
             links: (1..=pads).map(|p| (p, true)).collect(),
         }
     }
@@ -32,14 +37,12 @@ impl FaultState {
 #[derive(Clone)]
 pub struct FaultBox {
     inner: Arc<Mutex<FaultState>>,
-    pads: u16,
 }
 
 impl FaultBox {
-    pub fn new(pads: u16) -> Self {
+    pub fn new(pads: u16, wells_per_pad: u16) -> Self {
         Self {
-            inner: Arc::new(Mutex::new(FaultState::healthy(pads))),
-            pads,
+            inner: Arc::new(Mutex::new(FaultState::healthy(pads, wells_per_pad))),
         }
     }
 
@@ -69,6 +72,12 @@ impl FaultBox {
         *self.lock().links.get(&pad).unwrap_or(&true)
     }
 
+    /// Current field size as (pads, wells_per_pad).
+    pub fn topology(&self) -> (u16, u16) {
+        let st = self.lock();
+        (st.pads, st.wells_per_pad)
+    }
+
     /// Apply a command addressed to the edge. Returns the `fault_applied`
     /// event payload, or `None` when the command is not for this service.
     pub fn apply(&self, cmd: &ControlCommand) -> Option<serde_json::Value> {
@@ -90,8 +99,22 @@ impl FaultBox {
                 st.rate_multiplier = multiplier;
                 Some(json!({"cmd": "rate", "multiplier": multiplier}))
             }
+            ControlCommand::Topology {
+                pads,
+                wells_per_pad,
+            } => {
+                st.pads = pads;
+                st.wells_per_pad = wells_per_pad;
+                // Pads gained come up with a healthy link; pads kept keep
+                // their current link state; pads dropped keep their entry so
+                // re-growing restores it (harmless either way).
+                for p in 1..=pads {
+                    st.links.entry(p).or_insert(true);
+                }
+                Some(json!({"cmd": "topology", "pads": pads, "wells_per_pad": wells_per_pad}))
+            }
             ControlCommand::Reset => {
-                *st = FaultState::healthy(self.pads);
+                *st = FaultState::healthy(st.pads, st.wells_per_pad);
                 Some(json!({"cmd": "reset"}))
             }
             ControlCommand::Kill { .. } => None,
@@ -106,7 +129,7 @@ mod tests {
 
     #[test]
     fn apply_and_reset() {
-        let fb = FaultBox::new(2);
+        let fb = FaultBox::new(2, 1);
         assert!(fb.link_up(1));
 
         fb.apply(&ControlCommand::Link {
@@ -131,5 +154,29 @@ mod tests {
         assert!(fb.link_up(1));
         assert_eq!(fb.dup_rate(), 0.0);
         assert_eq!(fb.rate_multiplier(), 1.0);
+    }
+
+    #[test]
+    fn topology_is_a_setting_not_a_fault() {
+        let fb = FaultBox::new(2, 4);
+        assert_eq!(fb.topology(), (2, 4));
+
+        fb.apply(&ControlCommand::Link {
+            pad: 1,
+            state: LinkState::Down,
+        });
+        fb.apply(&ControlCommand::Topology {
+            pads: 5,
+            wells_per_pad: 2,
+        });
+        assert_eq!(fb.topology(), (5, 2));
+        // Grown pads come up healthy; existing link faults survive a resize.
+        assert!(!fb.link_up(1));
+        assert!(fb.link_up(5));
+
+        // Reset clears faults but keeps the field size.
+        fb.apply(&ControlCommand::Reset);
+        assert!(fb.link_up(1));
+        assert_eq!(fb.topology(), (5, 2));
     }
 }

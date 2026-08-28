@@ -62,11 +62,18 @@ accounting to lie.
 ## Run it
 
 ```sh
+./scripts/run-all.sh                               # infra + all three services
+open http://localhost:8000                         # the night-shift console
+./scripts/stop-all.sh                              # stop services (--infra for all)
+```
+
+Or piece by piece:
+
+```sh
 docker compose -f infra/docker-compose.yml up -d   # RabbitMQ 4 + TimescaleDB
 ./scripts/run-edge.sh                              # pad simulator (supervised)
 ./scripts/run-ingest.sh                            # consumer/sink (supervised)
 ./scripts/run-api.sh                               # FastAPI + dashboard
-open http://localhost:8000                         # the night-shift console
 ```
 
 `CB_MODE=stream` on the edge and ingest switches the data plane to RabbitMQ

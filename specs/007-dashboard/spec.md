@@ -55,7 +55,16 @@ canvas line charts with crosshair + tooltip hover).
 - **Scenario console** (spec 009 amendment): scenario cards with run
   buttons, a live-run banner (countdown, steps fired), the score card
   (grade, component breakdown, detail line) driven by `scenario_scored`
-  events, and the poison injector button.
+  events, and the poison injector button. A refused start (substrate
+  preflight, HTTP 409) renders its reason in the score slot: a
+  not-started shift is a first-class outcome, not a buried log line.
+- **Substrate pulse badges**: header dots for edge, ingest, broker
+  (arrival time of their last report: green under 5 s, amber under 15 s,
+  red beyond or never) and db (from `/api/status`). The first thing the
+  console answers is "is the substrate alive at all".
+- **Field size control**: pads and wells-per-pad inputs posting the
+  `topology` command; the current size renders from edge metrics (the
+  truth), inputs are seeded once and then belong to the operator.
 
 ## 4. Out of scope
 

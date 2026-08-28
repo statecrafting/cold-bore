@@ -24,6 +24,6 @@
     "summary": "The no-build-step browser console: live charts (throughput, backlog, latency, absorption) fed over WebSocket with rates derived from cumulative counters, stat tiles, the fault console (link/dup/reorder/rate/kill/reset), the event log, and the per-well live grid. Dark-only ops aesthetic; the validated reference palette's dark steps.\n",
     "title": "Dashboard: the night-shift console"
   },
-  "shardHash": "87a5be2aea9a329b9e27ac4d517bd5de46807a4f359cfe22a0c07dfe4ac9d7a1",
+  "shardHash": "856dc99a35ccfd015cd97bafcf6c0d14501e6c6048f46939ceb3c9c5ed559c38",
   "specVersion": "1.1.0"
 }
