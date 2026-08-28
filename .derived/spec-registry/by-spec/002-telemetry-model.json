@@ -23,6 +23,6 @@
     "summary": "The shared vocabulary of the pipeline: the sensor frame (with seq as the pipeline-wide idempotency and gap key), the control-command grammar, the metrics-snapshot and event shapes, broker object names, and the CB_* env configuration. Owned by the coldbore-proto crate; mirrored in Python by services/api.\n",
     "title": "Telemetry model and cross-language contracts"
   },
-  "shardHash": "e248d113414546bdc81b7576029ae7bffdb49ba41b7ce12e08a23a97aae40d45",
+  "shardHash": "821c63b63f33672d9cd70f5adc726b3ef5166d36000ae9622f12aad39d8843f8",
   "specVersion": "1.1.0"
 }

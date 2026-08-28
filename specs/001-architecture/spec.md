@@ -40,6 +40,15 @@ normative for:
   effectively exactly-once at the sink; ack/offset-store strictly after
   database commit; order-independent idempotent sink; dead-lettered poison;
   bounded buffers with counted, evented drops;
+- the liveness contract (§5 Liveness): a dead connection must never be
+  mistaken for a quiet one. Services prove liveness by traffic (bounded
+  round-trip probes, timeouts on every network wait, stall detection on
+  confirm streams), never assume it from the absence of errors, and fail
+  fast so supervision can work; the scenario engine will not arm over a
+  substrate that is not pulsing;
+- the control vocabulary (§7), including that `topology` is a runtime
+  setting (not a fault, `reset` keeps it) resizing the field without ever
+  reusing a seq;
 - the SLO measurement definitions (§9);
 - the phasing and spec map (§13).
 

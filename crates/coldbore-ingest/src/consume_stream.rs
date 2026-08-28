@@ -108,6 +108,11 @@ pub async fn run_stream(
     let mut metrics_tick =
         tokio::time::interval(Duration::from_millis(cfg.common.metrics_interval_ms));
     metrics_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    // The probe rides the AMQP side. In the post-sleep failure both
+    // connections die together, so breaking the session (and rebuilding the
+    // stream consumer with it) covers the data plane too.
+    let mut probe_tick = tokio::time::interval(consume::PROBE_INTERVAL);
+    probe_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
     let result = loop {
         tokio::select! {
@@ -152,8 +157,20 @@ pub async fn run_stream(
                 }
             }
             _ = metrics_tick.tick() => {
-                telemetry::publish_metrics(&channel, "stream", counters, gaps, &mut hist, committed)
-                    .await;
+                if tokio::time::timeout(
+                    consume::PROBE_TIMEOUT,
+                    telemetry::publish_metrics(&channel, "stream", counters, gaps, &mut hist, committed),
+                )
+                .await
+                .is_err()
+                {
+                    break Err(anyhow::anyhow!("metrics publish timed out; connection presumed dead"));
+                }
+            }
+            _ = probe_tick.tick() => {
+                if let Err(e) = consume::probe_liveness(&channel).await {
+                    break Err(e);
+                }
             }
         }
     };
@@ -176,9 +193,12 @@ async fn flush(
     consumer: &Consumer,
     hist: &mut Histogram<u64>,
 ) -> anyhow::Result<()> {
-    let inserted = sink
-        .insert_batch_with_offset(batch, STREAM_CONSUMER_NAME, last_offset)
-        .await?;
+    let inserted = tokio::time::timeout(
+        consume::FLUSH_TIMEOUT,
+        sink.insert_batch_with_offset(batch, STREAM_CONSUMER_NAME, last_offset),
+    )
+    .await
+    .map_err(|_| anyhow::anyhow!("batch insert timed out; database connection presumed dead"))??;
     let now = now_ms();
     counters.inserted += inserted;
     counters.dup_dropped += batch.len() as u64 - inserted;

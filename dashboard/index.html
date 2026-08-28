@@ -13,6 +13,12 @@
     <span class="brand-sub">night shift console</span>
   </div>
   <div class="header-status">
+    <span id="pulse" class="badge pulse" title="substrate pulse: green means reported within 5s">
+      <span class="dot" data-svc="edge">edge</span>
+      <span class="dot" data-svc="ingest">ingest</span>
+      <span class="dot" data-svc="broker">broker</span>
+      <span class="dot" data-svc="db">db</span>
+    </span>
     <span id="mode-badge" class="badge">mode: …</span>
     <span id="conn-badge" class="badge badge-bad">ws: connecting</span>
   </div>
@@ -93,6 +99,15 @@
             <button data-mult="10">10x</button>
             <button data-mult="20">20x</button>
             <button data-mult="50">50x</button>
+          </div>
+        </div>
+        <div class="fault-row">
+          <span class="fault-label">Field size</span>
+          <div class="btn-row field-size">
+            <label>pads <input id="topo-pads" type="number" min="1" max="64" step="1"></label>
+            <label>wells/pad <input id="topo-wells" type="number" min="1" max="64" step="1"></label>
+            <button id="topo-apply">apply</button>
+            <span id="topo-current" class="fault-note"></span>
           </div>
         </div>
         <div class="fault-row">

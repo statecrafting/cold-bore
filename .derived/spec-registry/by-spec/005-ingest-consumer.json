@@ -25,6 +25,6 @@
     "summary": "The consumer side: manual-ack consumption from the durable classic queue under bounded prefetch, batched idempotent inserts into the frames hypertable, ack strictly after commit, poison dead-lettering, per-well gap tracking with heal events, and per-second end-to-end latency histograms. The data path contains no test-only branches.\n",
     "title": "Ingest consumer: ack-after-commit, idempotent batched sink, gap accounting"
   },
-  "shardHash": "485660ceca5a24d1a93a4e45d8d99b6aa5a4c3271a7caafab37475144026a547",
+  "shardHash": "5f65a837e147aaaec13e016ecdc28e23ec150113c43f4e78297c25b50a6afdd7",
   "specVersion": "1.1.0"
 }

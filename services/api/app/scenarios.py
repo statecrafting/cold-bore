@@ -25,6 +25,9 @@ log = logging.getLogger("coldbore.scenarios")
 SCENARIOS_DIR = Path(__file__).resolve().parents[3] / "scenarios"
 SETTLE_S = 12.0
 CONTROL_ADAPTER: TypeAdapter = TypeAdapter(ControlCommand)
+# A service whose latest snapshot is older than this is not pulsing; a
+# scenario armed over a dead substrate would score an F that says nothing.
+PREFLIGHT_MAX_AGE_MS = 5000.0
 
 
 @dataclass
@@ -92,6 +95,8 @@ class Engine:
     pool_getter: Any  # () -> asyncpg.Pool | None
     publish_control: Any  # async (dict) -> None
     broadcast: Any  # (str) -> None
+    # () -> {service: latest metrics snapshot}; the preflight pulse check.
+    snapshots_getter: Any = None
     scenarios: dict[str, Scenario] = field(default_factory=load_all)
     active: dict | None = None
     _task: asyncio.Task | None = None
@@ -109,12 +114,38 @@ class Engine:
             for s in self.scenarios.values()
         ]
 
+    def substrate_problems(self) -> list[str]:
+        """What is keeping the substrate from pulsing right now.
+
+        Empty when the pipeline is live: database connected, and both edge
+        and ingest have reported a metrics snapshot within
+        PREFLIGHT_MAX_AGE_MS. A scenario refused for these reasons is the
+        honest form of what used to be a meaningless F over a dead pipeline.
+        """
+        problems: list[str] = []
+        if self.pool_getter() is None:
+            problems.append("database not connected")
+        snapshots = self.snapshots_getter() if self.snapshots_getter else {}
+        now_ms = time.time() * 1000
+        for service in ("edge", "ingest"):
+            snap = snapshots.get(service)
+            if not snap:
+                problems.append(f"{service} has never reported")
+                continue
+            age_ms = now_ms - float(snap.get("t_ms", 0))
+            if age_ms > PREFLIGHT_MAX_AGE_MS:
+                problems.append(f"{service} silent for {age_ms / 1000:.0f}s")
+        return problems
+
     async def start(self, scenario_id: str) -> dict:
         if self.active is not None:
             raise RuntimeError(f"scenario {self.active['scenario']} already running")
         scenario = self.scenarios.get(scenario_id)
         if scenario is None:
             raise KeyError(scenario_id)
+        problems = self.substrate_problems()
+        if problems:
+            raise RuntimeError("substrate not live: " + "; ".join(problems))
         self.active = {
             "scenario": scenario.id,
             "title": scenario.title,

@@ -55,7 +55,13 @@ rabbitmq.conf), `infra/timescale/init/*.sql`, `scripts/run-*.sh`.
   offset store is observability, this row is the truth.
 - Run scripts supervise: a service that exits non-zero (the `kill` drill)
   restarts after one second, so crash drills measure recovery, not
-  babysitting.
+  babysitting. Supervision only works because the services fail fast
+  (specs 004/005): a process that hangs instead of exiting is outside any
+  supervisor's reach.
+- `scripts/run-all.sh` lights the whole substrate in one command: infra up
+  (waiting on container health), then the three supervised services in the
+  background (logs and pidfiles under `.run/`, gitignored).
+  `scripts/stop-all.sh` stops the services (and infra with `--infra`).
 
 ## 4. Out of scope
 

@@ -33,6 +33,33 @@ use crate::gap::GapTracker;
 use crate::sink::Sink;
 use crate::telemetry::{self, Counters};
 
+/// Cadence and bound of the connection liveness probe. An idle consumer has
+/// no traffic to notice a dead connection by: after a host sleep the socket
+/// can die without lapin ever erroring, and `consumer.next()` would wait
+/// forever. A passive queue declare is a real broker round trip; hung or
+/// failed, the session errors out and the supervisor reconnects.
+pub(crate) const PROBE_INTERVAL: Duration = Duration::from_secs(5);
+pub(crate) const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
+
+pub(crate) async fn probe_liveness(channel: &Channel) -> anyhow::Result<()> {
+    let passive = QueueDeclareOptions {
+        passive: true,
+        ..QueueDeclareOptions::default()
+    };
+    match tokio::time::timeout(
+        PROBE_TIMEOUT,
+        channel.queue_declare(FRAMES_QUEUE.into(), passive, FieldTable::default()),
+    )
+    .await
+    {
+        Ok(Ok(_)) => Ok(()),
+        Ok(Err(e)) => Err(anyhow::anyhow!("liveness probe failed: {e}")),
+        Err(_) => Err(anyhow::anyhow!(
+            "liveness probe timed out after {PROBE_TIMEOUT:?}; connection presumed dead"
+        )),
+    }
+}
+
 /// One connected consume session. Returns `Err` when the broker or database
 /// connection dies; the supervisor in `main` reconnects. `gaps` and
 /// `counters` outlive the session on purpose: accounting does not reset just
@@ -88,6 +115,8 @@ pub async fn run_classic(
     let mut metrics_tick =
         tokio::time::interval(Duration::from_millis(cfg.common.metrics_interval_ms));
     metrics_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut probe_tick = tokio::time::interval(PROBE_INTERVAL);
+    probe_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
     let result = loop {
         tokio::select! {
@@ -113,8 +142,22 @@ pub async fn run_classic(
                 }
             }
             _ = metrics_tick.tick() => {
-                telemetry::publish_metrics(&channel, "classic", counters, gaps, &mut hist, None)
-                    .await;
+                // Bounded: a hung snapshot publish means a dead connection,
+                // and the session must end so the supervisor reconnects.
+                if tokio::time::timeout(
+                    PROBE_TIMEOUT,
+                    telemetry::publish_metrics(&channel, "classic", counters, gaps, &mut hist, None),
+                )
+                .await
+                .is_err()
+                {
+                    break Err(anyhow::anyhow!("metrics publish timed out; connection presumed dead"));
+                }
+            }
+            _ = probe_tick.tick() => {
+                if let Err(e) = probe_liveness(&channel).await {
+                    break Err(e);
+                }
             }
         }
     };
@@ -153,6 +196,11 @@ async fn accept(
     }
 }
 
+/// A batch insert is milliseconds of work; this bound firing means the
+/// database socket is dead (the post-sleep hang), and the session must end
+/// so the supervisor rebuilds both connections.
+pub(crate) const FLUSH_TIMEOUT: Duration = Duration::from_secs(30);
+
 /// Commit, account, then ack: strictly in that order.
 async fn flush(
     sink: &Sink,
@@ -163,7 +211,11 @@ async fn flush(
     highest_tag: &mut u64,
     hist: &mut Histogram<u64>,
 ) -> anyhow::Result<()> {
-    let inserted = sink.insert_batch(batch).await?;
+    let inserted = tokio::time::timeout(FLUSH_TIMEOUT, sink.insert_batch(batch))
+        .await
+        .map_err(|_| {
+            anyhow::anyhow!("batch insert timed out; database connection presumed dead")
+        })??;
     let now = now_ms();
     counters.inserted += inserted;
     counters.dup_dropped += batch.len() as u64 - inserted;

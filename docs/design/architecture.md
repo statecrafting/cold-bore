@@ -181,6 +181,21 @@ mode the stream itself is totally ordered and offset-monotonic. This
 distinction (ordering scope, and moving the ordering burden from transport to
 data model) is a core lesson the project exists to demonstrate.
 
+**Liveness.** A half-dead TCP connection (the signature a laptop host
+leaves after sleep/wake: no RST, writes buffer forever, reads never return)
+raises no client-library error, so waiting for errors is not a liveness
+strategy. Every service enforces its own: edge and ingest run a 5-second
+passive-declare probe (a real broker round trip, time-bounded), bound every
+publish, insert, and teardown reap with a timeout, and treat a confirm
+stream that makes no progress while frames are in flight as a dead
+connection. Any of these firing ends the session, and the in-process
+supervisor reconnects with capped backoff. A core task ending for any other
+reason exits the process non-zero so the script supervisor restarts it. The
+api's scenario engine adds a preflight on top: a scenario will not arm
+unless edge and ingest have reported within 5 seconds and the database is
+connected, so a dead substrate produces a named refusal, never a
+meaningless F.
+
 **Gap tracking.** Ingest keeps, per `(pad, well)`: the highest contiguous
 seq and a bounded set of open ranges. A frame beyond `expected` opens a gap
 and emits a `gap_opened` event; arrivals inside an open range shrink it; a
@@ -238,12 +253,19 @@ applies commands addressed to it and reports via a `fault_applied` event:
 | `dup` | `rate: 0.0..1.0` | edge | re-publish that fraction of confirmed frames |
 | `reorder` | `window: u32` (0 = off) | edge | emit frames in shuffled windows of that size |
 | `rate` | `multiplier: f64` | edge | scale generation frequency (volume surge) |
+| `topology` | `pads: u16`, `wells_per_pad: u16` | edge | resize the simulated field live (bounds: 1..=64 each, 2048 wells total) |
 | `kill` | `service: ingest\|edge` | named | process exits non-zero; supervisor restarts it |
 | `reset` | | all | clear all injected faults to defaults |
 
 Faults live **only** in the edge's publish path and the process supervisor;
 the ingest data path has no test-only branches. What the consumer survives,
 it survives for real.
+
+`topology` is a setting, not a fault: `reset` clears faults but keeps the
+current field size (`CB_PADS`/`CB_WELLS_PER_PAD` remain the boot defaults).
+New wells start their own seq timeline within the current epoch; existing
+wells never reset, and a well resized away and back resumes its counter, so
+seqs are never reused.
 
 ## 8. Telemetry plane
 
@@ -253,7 +275,8 @@ RabbitMQ management API (queue depth, unacked, publish/deliver rates) into
 the snapshot stream, and fans everything out over WebSocket.
 
 Edge snapshot: `generated`, `published`, `confirmed`, `retransmits`,
-`buffered`, `buffer_dropped`, `dup_injected`, `rate_hz`, per-pad link state.
+`buffered`, `buffer_dropped`, `dup_injected`, `rate_hz`, the live field size
+(`pads`, `wells_per_pad`), per-pad link state.
 Ingest snapshot: `consumed`, `inserted`, `dup_dropped`, `poison`,
 `redeliveries`, `batches`, `open_gaps`, `healed`, e2e latency `p50/p95/p99`
 (per-second histogram over frames flushed that second), `mode`, and in stream
@@ -348,6 +371,15 @@ under `docs/benchmarks/`.
   spill is a production necessity but adds recovery machinery (segment
   files, fsync policy, restart scan) orthogonal to what the lab teaches.
 - **Metrics over the broker, not Prometheus.** See §1.
+- **Application-level liveness probes, not library heartbeats.** A
+  21-hour production zombie (host sleep killed every TCP connection
+  silently; both Rust services hung forever with no error, no exit, and no
+  telemetry) showed that AMQP heartbeats as implemented by the client
+  library did not surface half-dead connections. The fix bounds every
+  network wait and probes with a real request/response round trip (§5
+  Liveness). The general lesson: a supervisor can only restart a process
+  that dies; fail-fast is a prerequisite for supervision, and liveness
+  must be proven by traffic, not assumed from the absence of errors.
 - **Docker Compose, not Kubernetes.** One laptop, one broker, five
   processes; compose keeps the demo one command. The role treats k8s as
   supporting skill; the write-up notes what a k8s deployment changes

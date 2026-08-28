@@ -64,6 +64,42 @@ function renderTiles() {
   }
 }
 
+// ── substrate pulse ───────────────────────────────────────────────────
+// The dashboard's first job is to show whether the substrate is alive at
+// all: green within 5s of a report, amber to 15s, red after. Arrival time
+// (not snapshot t_ms) so a stopped clock cannot fake a pulse.
+const lastSeen = { edge: 0, ingest: 0, broker: 0 };
+let dbConnected = null;
+const pulseDots = {};
+for (const el of document.querySelectorAll("#pulse .dot")) pulseDots[el.dataset.svc] = el;
+
+function renderPulse() {
+  const now = Date.now();
+  for (const svc of ["edge", "ingest", "broker"]) {
+    const seen = lastSeen[svc];
+    const age = now - seen;
+    const cls = seen && age < 5000 ? "live" : seen && age < 15000 ? "stale" : "dead";
+    const el = pulseDots[svc];
+    el.classList.remove("live", "stale", "dead");
+    el.classList.add(cls);
+    el.title = seen ? `${svc}: last report ${(age / 1000).toFixed(0)}s ago` : `${svc}: never reported`;
+  }
+  const db = pulseDots.db;
+  db.classList.remove("live", "stale", "dead");
+  db.classList.add(dbConnected ? "live" : "dead");
+  db.title = dbConnected ? "db: connected" : "db: not connected";
+}
+setInterval(renderPulse, 1000);
+async function pollStatus() {
+  try {
+    const res = await fetch("/api/status");
+    if (res.ok) dbConnected = (await res.json()).db_connected;
+    else dbConnected = null;
+  } catch { dbConnected = null; }
+}
+pollStatus();
+setInterval(pollStatus, 5000);
+
 // ── state / rates ─────────────────────────────────────────────────────
 const latest = { edge: null, ingest: null, broker: null };
 const prev = { edge: null, ingest: null };
@@ -85,7 +121,9 @@ const rates = {
 function onMetrics(service, m) {
   const before = prev[service];
   latest[service] = m;
+  if (service in lastSeen) lastSeen[service] = Date.now();
   if (service === "edge") {
+    renderTopology(m);
     rates.gen = rate(m, before, "generated") ?? rates.gen;
     rates.conf = rate(m, before, "confirmed") ?? rates.conf;
     rates.retrans = rate(m, before, "retransmits") ?? rates.retrans;
@@ -199,6 +237,25 @@ for (const row of document.querySelectorAll(".btn-row[data-cmd]")) {
     else if (cmd === "rate") sendControl({ cmd, multiplier: Number(btn.dataset.mult) });
   });
 }
+// ── field size (topology) ─────────────────────────────────────────────
+const topoPads = document.getElementById("topo-pads");
+const topoWells = document.getElementById("topo-wells");
+const topoCurrent = document.getElementById("topo-current");
+document.getElementById("topo-apply").addEventListener("click", () => {
+  const pads = Number(topoPads.value);
+  const wells_per_pad = Number(topoWells.value);
+  if (Number.isInteger(pads) && Number.isInteger(wells_per_pad) && pads >= 1 && wells_per_pad >= 1) {
+    sendControl({ cmd: "topology", pads, wells_per_pad });
+  }
+});
+function renderTopology(m) {
+  if (m.pads == null) return;
+  topoCurrent.textContent = `now ${m.pads} × ${m.wells_per_pad} = ${m.pads * m.wells_per_pad} wells @ ${m.rate_hz} Hz`;
+  // Seed the inputs once; after that they belong to the operator.
+  if (!topoPads.value && document.activeElement !== topoPads) topoPads.value = m.pads;
+  if (!topoWells.value && document.activeElement !== topoWells) topoWells.value = m.wells_per_pad;
+}
+
 document.getElementById("kill-ingest").addEventListener("click", () => sendControl({ cmd: "kill", service: "ingest" }));
 document.getElementById("poison").addEventListener("click", async () => {
   try {
@@ -235,8 +292,12 @@ async function loadScenarios() {
         e.target.disabled = true;
         try {
           const r = await fetch(`/api/scenarios/${s.id}/start`, { method: "POST" });
-          if (!r.ok) logEvent("scenario_rejected", "console", Date.now(), { id: s.id, status: r.status });
-          else {
+          if (!r.ok) {
+            let detail = `HTTP ${r.status}`;
+            try { detail = (await r.json()).detail ?? detail; } catch { /* keep status text */ }
+            showRejection(s.title, String(detail));
+            logEvent("scenario_rejected", "console", Date.now(), { id: s.id, status: r.status, detail });
+          } else {
             const b = await r.json();
             activeRun = b.active;
             scenarioScore.hidden = true;
@@ -260,6 +321,24 @@ setInterval(() => {
     <span class="t">${Math.max(0, activeRun.duration_s - elapsed).toFixed(0)}s left</span> ·
     ${activeRun.steps_fired ?? 0} steps fired`;
 }, 1000);
+
+// A refused start is a first-class outcome: the reason (usually "substrate
+// not live") belongs in the score slot, not buried in the event log.
+function showRejection(title, detail) {
+  activeRun = null;
+  scenarioScore.hidden = false;
+  scenarioScore.replaceChildren();
+  const grade = document.createElement("span");
+  grade.className = "grade bad";
+  grade.textContent = "✕";
+  const headline = document.createElement("span");
+  headline.className = "headline";
+  headline.textContent = `${title}: not started`;
+  const line = document.createElement("span");
+  line.className = "line";
+  line.textContent = detail;
+  scenarioScore.append(grade, headline, line);
+}
 
 function showScore(data) {
   activeRun = null;
@@ -292,7 +371,7 @@ function connect() {
     let msg;
     try { msg = JSON.parse(e.data); } catch { return; }
     if (msg.type === "metrics") onMetrics(msg.service, msg.data);
-    else if (msg.type === "broker") { latest.broker = msg.data; }
+    else if (msg.type === "broker") { latest.broker = msg.data; lastSeen.broker = Date.now(); }
     else if (msg.type === "wells") renderWells(msg.data);
     else if (msg.type === "event") {
       logEvent(msg.kind, msg.service, msg.t_ms, msg.data);

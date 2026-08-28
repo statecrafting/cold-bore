@@ -43,28 +43,42 @@ fn main() -> anyhow::Result<()> {
 }
 
 async fn run(cfg: EdgeConfig) -> anyhow::Result<()> {
-    let faults = faults::FaultBox::new(cfg.pads);
+    let faults = faults::FaultBox::new(cfg.pads, cfg.wells_per_pad);
     let counters = Arc::new(telemetry::Counters::default());
     let (tx, rx) = tokio::sync::mpsc::channel(8192);
     // The producer generation: frame identity and the stream producer's
     // dedup name both embed it.
     let epoch = now_ms();
 
-    let generator = tokio::spawn(sim::generator(
+    let mut generator = tokio::spawn(sim::generator(
         cfg.clone(),
         faults.clone(),
         counters.clone(),
         tx,
         epoch,
     ));
-    let uplink = match cfg.common.mode {
+    let mut uplink = match cfg.common.mode {
         Mode::Classic => tokio::spawn(uplink::run(cfg, faults, counters, rx)),
         Mode::Stream => tokio::spawn(uplink_stream::run(cfg, faults, counters, rx, epoch)),
     };
 
-    tokio::signal::ctrl_c().await?;
-    info!("shutting down");
-    generator.abort();
-    uplink.abort();
-    Ok(())
+    // Either core task ending outside a ctrl-c is a failure, and the process
+    // must die loudly so the supervisor restarts it: a silent partial death
+    // is how a pipeline zombifies.
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {
+            info!("shutting down");
+            generator.abort();
+            uplink.abort();
+            Ok(())
+        }
+        result = &mut generator => {
+            uplink.abort();
+            Err(anyhow::anyhow!("generator task ended unexpectedly: {result:?}"))
+        }
+        result = &mut uplink => {
+            generator.abort();
+            Err(anyhow::anyhow!("uplink task ended unexpectedly: {result:?}"))
+        }
+    }
 }

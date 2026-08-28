@@ -52,6 +52,11 @@ panel and score card (007), the `scenario_runs` table (003).
   the timeline, emits `scenario_*` events into the telemetry stream (so the
   event log and persistence see the shift the same way they see faults),
   always ends with `reset`, waits a fixed settle window, then scores.
+- **Preflight before arming** (006 amendment): a scenario starts only over
+  a pulsing substrate (database connected; edge and ingest snapshots
+  within 5 s). Otherwise the start is refused with every problem named.
+  An F must mean the pipeline failed the drill, never that nothing was
+  running.
 - Scoring reads only from the database: completeness = rows vs seq spans
   per (well, epoch) over the run (late fills count: that is what
   store-and-forward is for); latency = fraction of ingest snapshots with

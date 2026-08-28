@@ -82,12 +82,28 @@ pub async fn metrics_task(
             buffer_dropped: counters.buffer_dropped.load(Relaxed),
             dup_injected: counters.dup_injected.load(Relaxed),
             rate_hz: cfg.rate_hz * f.rate_multiplier,
+            pads: f.pads,
+            wells_per_pad: f.wells_per_pad,
             links: f.links,
         };
         let body = serde_json::to_vec(&snapshot).unwrap_or_default();
-        if let Err(e) = publish_json(&channel, metrics_routing_key("edge"), body).await {
-            warn!(error = %e, "metrics publish failed; task exiting until reconnect");
-            return;
+        // Bounded: on a half-dead connection a publish can hang instead of
+        // erroring; either way the task exits and reconnect respawns it.
+        match tokio::time::timeout(
+            Duration::from_secs(5),
+            publish_json(&channel, metrics_routing_key("edge"), body),
+        )
+        .await
+        {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                warn!(error = %e, "metrics publish failed; task exiting until reconnect");
+                return;
+            }
+            Err(_) => {
+                warn!("metrics publish timed out; task exiting until reconnect");
+                return;
+            }
         }
     }
 }

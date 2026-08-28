@@ -91,6 +91,11 @@ impl WellSim {
 /// The generation loop. Sensors do not stop sampling when the uplink is
 /// down: frames are always produced and handed to the uplink, which decides
 /// whether they publish or buffer.
+///
+/// The field size is read from the control state every tick, so a
+/// `topology` command takes effect on the next sample. Wells are created on
+/// demand and never discarded: a well resized away and back within one
+/// epoch resumes its own seq counter, so seqs are never reused.
 pub async fn generator(
     cfg: EdgeConfig,
     faults: FaultBox,
@@ -101,10 +106,8 @@ pub async fn generator(
     // One epoch per process run (assigned in main): seq accounting
     // downstream stays sound across edge restarts because identity
     // includes the epoch, and the stream producer's dedup name embeds it.
-    let mut wells: Vec<WellSim> = (1..=cfg.pads)
-        .flat_map(|p| (1..=cfg.wells_per_pad).map(move |w| (p, w)))
-        .map(|(p, w)| WellSim::new(p, w, epoch))
-        .collect();
+    let mut wells: std::collections::BTreeMap<(u16, u16), WellSim> =
+        std::collections::BTreeMap::new();
 
     let mut acc = 0.0_f64;
     let mut last = Instant::now();
@@ -121,13 +124,19 @@ pub async fn generator(
         let samples = acc.floor() as u64;
         acc -= samples as f64;
 
+        let (pads, wells_per_pad) = faults.topology();
         for _ in 0..samples {
             let t_ms = now_ms();
-            for well in wells.iter_mut() {
-                let frame = well.step(t_ms, 1.0 / hz);
-                counters.generated.fetch_add(1, Relaxed);
-                if tx.send(frame).await.is_err() {
-                    return; // uplink gone; shutting down
+            for p in 1..=pads {
+                for w in 1..=wells_per_pad {
+                    let well = wells
+                        .entry((p, w))
+                        .or_insert_with(|| WellSim::new(p, w, epoch));
+                    let frame = well.step(t_ms, 1.0 / hz);
+                    counters.generated.fetch_add(1, Relaxed);
+                    if tx.send(frame).await.is_err() {
+                        return; // uplink gone; shutting down
+                    }
                 }
             }
         }

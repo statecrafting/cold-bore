@@ -44,8 +44,13 @@ parsing, panic-free).
 - Counters in metric snapshots are cumulative since process start; consumers
   derive rates by differencing. A missed snapshot is harmless.
 - Control commands carry their own bounds (`dup` in [0,1], `reorder` <=
-  4096, `rate` in (0,100]); both the api (pre-publish) and services
+  4096, `rate` in (0,100], `topology` within 1..=64 pads x 1..=64 wells and
+  at most 2048 wells total); both the api (pre-publish) and services
   (post-receive) validate.
+- `topology { pads, wells_per_pad }` resizes the simulated field at
+  runtime. It is a setting, not a fault: `reset` clears faults but keeps
+  the current field size. The edge snapshot reports the live values
+  (`pads`, `wells_per_pad`) so consoles can reflect actual state.
 - Stream-mode additions (spec 008): the config carries the native stream
   endpoint (`CB_STREAM_HOST/PORT/USER/PASS`), the consumer start grammar
   (`CB_STREAM_FROM` = `first|next|offset:N`, `CB_STREAM_FORCE_FROM`), and

@@ -17,6 +17,9 @@ __pycache__/
 .derived/**/build-meta.json
 .derived/attestation/
 
+# run-all.sh working state: service logs and pidfiles
+.run/
+
 # OS / editor cruft
 .DS_Store
 *.swp

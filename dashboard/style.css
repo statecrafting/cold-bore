@@ -58,6 +58,14 @@ header {
 .badge-good { color: var(--good); }
 .badge-bad { color: var(--critical); }
 
+/* ── substrate pulse ────────────────────────────────────────────────── */
+.pulse { display: inline-flex; gap: 10px; align-items: center; }
+.pulse .dot { color: var(--muted); font-size: 12px; }
+.pulse .dot::before { content: "● "; color: var(--muted); }
+.pulse .dot.live::before { color: var(--good); }
+.pulse .dot.stale::before { color: var(--warning); }
+.pulse .dot.dead::before { color: var(--critical); }
+
 main { padding: 16px 20px 40px; max-width: 1400px; margin: 0 auto; }
 
 /* ── stat tiles ─────────────────────────────────────────────────────── */
@@ -196,6 +204,21 @@ button.danger { color: var(--serious); }
 button.danger:hover { border-color: var(--critical); color: var(--critical); }
 button.primary { border-color: var(--series-1); color: var(--ink); }
 button.link-down { border-color: var(--critical); color: var(--critical); }
+
+/* ── field size (topology) ──────────────────────────────────────────── */
+.field-size { align-items: center; }
+.field-size label { color: var(--muted); font-size: 12px; display: inline-flex; gap: 5px; align-items: center; }
+.field-size input {
+  width: 52px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  padding: 3px 6px;
+}
+.fault-note { color: var(--muted); font-size: 11px; }
 
 /* ── events ─────────────────────────────────────────────────────────── */
 .events {

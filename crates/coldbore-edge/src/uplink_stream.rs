@@ -44,6 +44,13 @@ const PUBLISH_BATCH: usize = 128;
 /// A confirmation older than this is presumed lost; the frame retransmits
 /// (same publishing id, so the broker dedups if it did arrive).
 const CONFIRM_TIMEOUT: Duration = Duration::from_secs(10);
+/// Frames in flight but zero confirms arriving for this long: the stream
+/// connection is presumed dead (retransmit sweeps alone would cycle
+/// forever); tear the session down and rebuild both connections.
+const CONFIRM_STALL_TIMEOUT: Duration = Duration::from_secs(30);
+/// A `batch_send` that does not return within this bound means a hung
+/// socket, not a slow broker.
+const SEND_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Stream-specific custody: survives reconnects alongside `UplinkState`.
 struct StreamCustody {
@@ -150,7 +157,17 @@ async fn connect_and_serve(
         )
         .await;
         let mut producer = producer;
-        let outcome = publish_loop(cfg, faults, counters, rx, st, custody, &mut producer).await;
+        let outcome = publish_loop(
+            cfg,
+            faults,
+            counters,
+            rx,
+            st,
+            custody,
+            &mut producer,
+            &channel,
+        )
+        .await;
         let _ = producer.close().await;
         outcome
     }
@@ -161,6 +178,7 @@ async fn connect_and_serve(
     result
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn publish_loop(
     cfg: &EdgeConfig,
     faults: &FaultBox,
@@ -169,6 +187,7 @@ async fn publish_loop(
     st: &mut UplinkState,
     custody: &mut StreamCustody,
     producer: &mut Producer<Dedup>,
+    channel: &lapin::Channel,
 ) -> anyhow::Result<()> {
     let (conf_tx, mut conf_rx) = tokio::sync::mpsc::unbounded_channel::<(u64, bool)>();
     // publishing id -> (frame, is_dup, sent_at)
@@ -177,6 +196,7 @@ async fn publish_loop(
     drain_tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
     let mut sweep_tick = tokio::time::interval(Duration::from_secs(1));
     sweep_tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
+    let mut last_confirm = Instant::now();
 
     loop {
         // Pump: batch publishes up to the confirm window.
@@ -209,19 +229,23 @@ async fn publish_loop(
             }
             let sent = messages.len() as u64;
             let tx = conf_tx.clone();
-            if let Err(e) = producer
-                .batch_send(messages, move |confirmation| {
-                    let tx = tx.clone();
-                    async move {
-                        // The Err variant does not identify the message;
-                        // the timeout sweep recovers those.
-                        if let Ok(status) = confirmation {
-                            let _ = tx.send((status.publishing_id(), status.confirmed()));
-                        }
+            let send = producer.batch_send(messages, move |confirmation| {
+                let tx = tx.clone();
+                async move {
+                    // The Err variant does not identify the message;
+                    // the timeout sweep recovers those.
+                    if let Ok(status) = confirmation {
+                        let _ = tx.send((status.publishing_id(), status.confirmed()));
                     }
-                })
-                .await
-            {
+                }
+            });
+            let send_result = match tokio::time::timeout(SEND_TIMEOUT, send).await {
+                Ok(r) => r.map_err(|e| anyhow::anyhow!("stream publish failed: {e}")),
+                Err(_) => Err(anyhow::anyhow!(
+                    "stream publish timed out after {SEND_TIMEOUT:?}; connection presumed dead"
+                )),
+            };
+            if let Err(e) = send_result {
                 // Publish failed wholesale: recover the staged frames and
                 // reconnect. Same ids on retransmit; the broker dedups any
                 // that actually arrived.
@@ -233,7 +257,7 @@ async fn publish_loop(
                     }
                 }
                 drain_inflight_to_retry(&mut inflight, custody);
-                return Err(anyhow::anyhow!("stream publish failed: {e}"));
+                return Err(e);
             }
             counters.published.fetch_add(sent, Relaxed);
         }
@@ -246,6 +270,7 @@ async fn publish_loop(
             confirmed = conf_rx.recv() => {
                 // The channel cannot close while conf_tx lives in this scope.
                 let Some((id, ok)) = confirmed else { continue };
+                last_confirm = Instant::now();
                 if let Some((frame, is_dup, _)) = inflight.remove(&id) {
                     if ok {
                         counters.confirmed.fetch_add(1, Relaxed);
@@ -274,8 +299,23 @@ async fn publish_loop(
                 }
             }
             _ = sweep_tick.tick() => {
-                // Confirmations presumed lost: retransmit under the same id.
                 let now = Instant::now();
+                if inflight.is_empty() && custody.retry_ids.is_empty() {
+                    last_confirm = now;
+                } else if now.duration_since(last_confirm) > CONFIRM_STALL_TIMEOUT {
+                    let stalled = inflight.len() + custody.retry_ids.len();
+                    drain_inflight_to_retry(&mut inflight, custody);
+                    return Err(anyhow::anyhow!(
+                        "no stream confirm progress for {CONFIRM_STALL_TIMEOUT:?} with {stalled} pending; connection presumed dead"
+                    ));
+                }
+                // AMQP-side liveness (control + telemetry ride it): a dead
+                // connection there must also end the session.
+                if let Err(e) = uplink::probe_liveness(channel).await {
+                    drain_inflight_to_retry(&mut inflight, custody);
+                    return Err(e);
+                }
+                // Confirmations presumed lost: retransmit under the same id.
                 let stale: Vec<u64> = inflight
                     .iter()
                     .filter(|(_, (_, _, sent))| now.duration_since(*sent) > CONFIRM_TIMEOUT)
